@@ -9,29 +9,10 @@ using TransactionLedger.Tests.Infrastructure;
 namespace TransactionLedger.Tests.Integration;
 
 /// <summary>Tests A1-A6 from docs/07-testing-strategy.md §4.1.</summary>
-[Collection(DatabaseCollection.Name)]
-public sealed class AuthTests : IAsyncLifetime
+public sealed class AuthTests : IntegrationTestBase
 {
-    private readonly DatabaseFixture _database;
-    private ApiFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    public AuthTests(DatabaseFixture database)
+    public AuthTests(DatabaseFixture database) : base(database)
     {
-        _database = database;
-    }
-
-    public Task InitializeAsync()
-    {
-        _factory = new ApiFactory(_database.ConnectionString);
-        _client = _factory.CreateClient();
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _client.Dispose();
-        return _factory.DisposeAsync().AsTask();
     }
 
     // A1
@@ -40,7 +21,7 @@ public sealed class AuthTests : IAsyncLifetime
     {
         var email = TestClient.UniqueEmail();
 
-        var response = await _client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/auth/register", new
         {
             email,
             password = TestClient.DefaultPassword,
@@ -64,9 +45,9 @@ public sealed class AuthTests : IAsyncLifetime
     public async Task Register_with_duplicate_email_returns_409_email_already_registered()
     {
         var email = TestClient.UniqueEmail();
-        await TestClient.RegisterAsync(_client, email);
+        await TestClient.RegisterAsync(Client, email);
 
-        var response = await _client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/auth/register", new
         {
             email,
             password = TestClient.DefaultPassword,
@@ -85,9 +66,9 @@ public sealed class AuthTests : IAsyncLifetime
     public async Task Register_with_same_email_in_different_case_returns_409()
     {
         var email = TestClient.UniqueEmail();
-        await TestClient.RegisterAsync(_client, email);
+        await TestClient.RegisterAsync(Client, email);
 
-        var response = await _client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/auth/register", new
         {
             email = email.ToUpperInvariant(),
             password = TestClient.DefaultPassword,
@@ -103,7 +84,7 @@ public sealed class AuthTests : IAsyncLifetime
     {
         const string password = "Unmistakable!Password9";
 
-        var response = await _client.PostAsJsonAsync("/api/auth/register", new
+        var response = await Client.PostAsJsonAsync("/api/auth/register", new
         {
             email = TestClient.UniqueEmail(),
             password,
@@ -123,10 +104,10 @@ public sealed class AuthTests : IAsyncLifetime
         var firstEmail = TestClient.UniqueEmail();
         var secondEmail = TestClient.UniqueEmail();
 
-        await TestClient.RegisterAsync(_client, firstEmail);
-        await TestClient.RegisterAsync(_client, secondEmail);
+        await TestClient.RegisterAsync(Client, firstEmail);
+        await TestClient.RegisterAsync(Client, secondEmail);
 
-        using var scope = _factory.Services.CreateScope();
+        using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var first = await db.Users.AsNoTracking().SingleAsync(u => u.Email == firstEmail);
@@ -144,9 +125,9 @@ public sealed class AuthTests : IAsyncLifetime
     public async Task Login_with_correct_credentials_returns_a_token_whose_sub_is_the_user_id()
     {
         var email = TestClient.UniqueEmail();
-        var registered = await TestClient.RegisterAsync(_client, email);
+        var registered = await TestClient.RegisterAsync(Client, email);
 
-        var login = await TestClient.LoginAsync(_client, email);
+        var login = await TestClient.LoginAsync(Client, email);
 
         Assert.Equal(registered.Id, login.User.Id);
         Assert.False(string.IsNullOrWhiteSpace(login.AccessToken));
@@ -164,15 +145,15 @@ public sealed class AuthTests : IAsyncLifetime
     public async Task Wrong_password_and_unknown_email_return_identical_401_bodies()
     {
         var email = TestClient.UniqueEmail();
-        await TestClient.RegisterAsync(_client, email);
+        await TestClient.RegisterAsync(Client, email);
 
-        var wrongPassword = await _client.PostAsJsonAsync("/api/auth/login", new
+        var wrongPassword = await Client.PostAsJsonAsync("/api/auth/login", new
         {
             email,
             password = "Definitely!TheWrongOne1"
         });
 
-        var unknownEmail = await _client.PostAsJsonAsync("/api/auth/login", new
+        var unknownEmail = await Client.PostAsJsonAsync("/api/auth/login", new
         {
             email = TestClient.UniqueEmail(),
             password = TestClient.DefaultPassword
