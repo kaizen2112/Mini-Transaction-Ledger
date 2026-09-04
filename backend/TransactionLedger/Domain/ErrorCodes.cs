@@ -8,10 +8,16 @@ namespace TransactionLedger.Domain;
 public static class ErrorCodes
 {
     public const string ValidationFailed = "VALIDATION_FAILED";
+    public const string AmountNotPositive = "AMOUNT_NOT_POSITIVE";
+    public const string AmountTooLarge = "AMOUNT_TOO_LARGE";
+    public const string AmountScaleInvalid = "AMOUNT_SCALE_INVALID";
+    public const string DescriptionTooLong = "DESCRIPTION_TOO_LONG";
+    public const string CategorySystemOnly = "CATEGORY_SYSTEM_ONLY";
     public const string InvalidCredentials = "INVALID_CREDENTIALS";
     public const string Unauthenticated = "UNAUTHENTICATED";
     public const string NotFound = "NOT_FOUND";
     public const string EmailAlreadyRegistered = "EMAIL_ALREADY_REGISTERED";
     public const string AccountNameTaken = "ACCOUNT_NAME_TAKEN";
+    public const string InsufficientFunds = "INSUFFICIENT_FUNDS";
     public const string InternalError = "INTERNAL_ERROR";
 }
