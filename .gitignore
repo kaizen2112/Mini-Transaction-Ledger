@@ -1,0 +1,29 @@
+# --- project docs, deliberately private ---
+docs/
+AGENTS.md
+CLAUDE.md
+
+# --- secrets ---
+.env
+!.env.example
+
+# --- .NET ---
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userprefs
+TestResults/
+*.received.*
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
