@@ -1,15 +1,50 @@
-using Microsoft.Extensions.Options;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TransactionLedger.Configuration;
 using TransactionLedger.Data;
+using TransactionLedger.Domain;
 using TransactionLedger.Middleware;
+using TransactionLedger.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Controllers, not minimal APIs: the HTTP surface stays declarative and
 // attribute-routed, and every endpoint has one obvious home on disk.
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // [ApiController]'s automatic 400 otherwise emits ASP.NET's own
+        // ValidationProblemDetails shape, which has no `code` member. The
+        // frontend switches on `code` (BR-45), so it must be present here too.
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    entry => entry.Key,
+                    entry => entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray());
+
+            var problem = ProblemResponse.Build(
+                StatusCodes.Status400BadRequest,
+                ErrorCodes.ValidationFailed,
+                "The request failed validation.",
+                context.HttpContext.TraceIdentifier,
+                errors);
+
+            return new ObjectResult(problem)
+            {
+                StatusCode = StatusCodes.Status400BadRequest,
+                ContentTypes = { ProblemResponse.ContentType }
+            };
+        };
+    });
 
 // Strongly typed, validated at startup (ValidateOnStart). A Jwt:Key under
 // 32 characters or a missing connection string crashes the app at boot,
@@ -35,6 +70,57 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
     var dbSettings = serviceProvider.GetRequiredService<IOptions<DatabaseSettings>>().Value;
     options.UseNpgsql(dbSettings.ConnectionString);
 });
+
+// PBKDF2 with a per-password salt and an embedded iteration count (BR-09).
+// Stateless and thread-safe, so a singleton is correct.
+builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer();
+
+builder.Services
+    .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtSettings>>((options, jwtSettings) =>
+    {
+        var settings = jwtSettings.Value;
+
+        // Keep `sub` as `sub`. Without this the handler helpfully rewrites it
+        // to the long ClaimTypes.NameIdentifier URI and GetUserId() (BR-06)
+        // silently finds nothing.
+        options.MapInboundClaims = false;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = settings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = settings.Audience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.Key)),
+            ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            // The handler's default 401 has an empty body. The contract says
+            // every error is problem+json with a code (BR-45).
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                await ProblemResponse.WriteAsync(
+                    context.HttpContext,
+                    StatusCodes.Status401Unauthorized,
+                    ErrorCodes.Unauthenticated,
+                    "Authentication is required to access this resource.");
+            }
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 builder.Services
     .AddHealthChecks()
@@ -75,10 +161,12 @@ var app = builder.Build();
 //      problem+json with a traceId and never a stack trace (BR-45/BR-47)
 //   2. Swagger, Development only - a documentation surface, not a protected
 //      endpoint, so it sits above auth deliberately
-//   3. UseRouting - selects the endpoint before anything below can inspect it
-//   4. UseAuthentication / UseAuthorization - arrive in B4; nothing to
-//      enforce yet, so they are not called here
-//   5. MapControllers - terminal
+//   3. UseRouting - matches the endpoint and attaches its metadata, which
+//      UseAuthorization below cannot read until it has run
+//   4. UseAuthentication - turns the bearer token into a ClaimsPrincipal
+//   5. UseAuthorization - enforces the matched endpoint's policy using that
+//      principal; nothing to judge without step 4
+//   6. MapControllers - terminal
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -89,13 +177,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
 // Guarded by config: local `dotnet run` defaults this to false so a
 // developer without Postgres running yet does not crash-loop; Docker
 // Compose sets Database__RunMigrationsOnStartup=true explicitly, after the
-// db healthcheck has already passed (docs/08-docker.md §5/§7). A no-op
-// until Step 6 adds the first migration.
+// db healthcheck has already passed (docs/08-docker.md §5/§7).
 using (var scope = app.Services.CreateScope())
 {
     var dbSettings = scope.ServiceProvider.GetRequiredService<IOptions<DatabaseSettings>>().Value;
@@ -107,3 +197,10 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+/// <summary>
+/// Top-level statements compile to an internal Program class. This makes it
+/// visible to WebApplicationFactory&lt;Program&gt; in the test project
+/// (docs/07-testing-strategy.md §3).
+/// </summary>
+public partial class Program;

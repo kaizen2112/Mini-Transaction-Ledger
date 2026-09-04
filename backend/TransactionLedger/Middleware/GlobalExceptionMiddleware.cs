@@ -1,4 +1,3 @@
-using System.Text.Json;
 using TransactionLedger.Domain;
 
 namespace TransactionLedger.Middleware;
@@ -30,44 +29,16 @@ public sealed class GlobalExceptionMiddleware
         catch (DomainException ex)
         {
             _logger.LogWarning(ex, "Domain exception {Code}: {Message}", ex.Code, ex.Message);
-            await WriteProblemAsync(context, ex.StatusCode, ex.Code, ex.Message);
+            await ProblemResponse.WriteAsync(context, ex.StatusCode, ex.Code, ex.Message);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception. TraceId={TraceId}", context.TraceIdentifier);
-            await WriteProblemAsync(
+            await ProblemResponse.WriteAsync(
                 context,
                 StatusCodes.Status500InternalServerError,
-                "INTERNAL_ERROR",
+                ErrorCodes.InternalError,
                 "An unexpected error occurred.");
         }
     }
-
-    private static async Task WriteProblemAsync(HttpContext context, int statusCode, string code, string detail)
-    {
-        context.Response.ContentType = "application/problem+json";
-        context.Response.StatusCode = statusCode;
-
-        var problem = new
-        {
-            type = $"https://httpstatuses.io/{statusCode}",
-            title = ReasonPhrase(statusCode),
-            status = statusCode,
-            code,
-            detail,
-            traceId = context.TraceIdentifier
-        };
-
-        await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
-    }
-
-    private static string ReasonPhrase(int statusCode) => statusCode switch
-    {
-        StatusCodes.Status400BadRequest => "Bad Request",
-        StatusCodes.Status401Unauthorized => "Unauthorized",
-        StatusCodes.Status404NotFound => "Not Found",
-        StatusCodes.Status409Conflict => "Conflict",
-        StatusCodes.Status422UnprocessableEntity => "Unprocessable Entity",
-        _ => "An error occurred"
-    };
 }
