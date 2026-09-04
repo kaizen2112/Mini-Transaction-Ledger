@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +19,16 @@ var builder = WebApplication.CreateBuilder(args);
 // attribute-routed, and every endpoint has one obvious home on disk.
 builder.Services
     .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Contract §1.3: enums serialise as their NAMES in both directions.
+        // The integer storage in docs/04 §1.4 is an implementation detail the
+        // API does not leak.
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+
+        // Contract Format header: money is a JSON number with two decimals.
+        options.JsonSerializerOptions.Converters.Add(new MoneyJsonConverter());
+    })
     .ConfigureApiBehaviorOptions(options =>
     {
         // [ApiController]'s automatic 400 otherwise emits ASP.NET's own
@@ -76,6 +87,7 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

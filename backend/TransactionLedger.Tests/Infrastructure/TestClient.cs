@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using TransactionLedger.DTOs;
 
 namespace TransactionLedger.Tests.Infrastructure;
@@ -12,6 +14,17 @@ namespace TransactionLedger.Tests.Infrastructure;
 public static class TestClient
 {
     public const string DefaultPassword = "S3cure!passphrase";
+
+    /// <summary>
+    /// Mirrors the API's own serialisation: enums travel as NAMES in both
+    /// directions (contract §1.3). Without the converter the client cannot
+    /// read "type":"Cash" back into AccountType, which is a client-side
+    /// limitation, not an API one.
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     public static string UniqueEmail(string prefix = "user") =>
         $"{prefix}-{Guid.NewGuid():N}@example.com";
@@ -30,7 +43,7 @@ public static class TestClient
         });
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<RegisterResponse>())!;
+        return (await response.Content.ReadFromJsonAsync<RegisterResponse>(JsonOptions))!;
     }
 
     public static async Task<LoginResponse> LoginAsync(
@@ -41,7 +54,7 @@ public static class TestClient
         var response = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<LoginResponse>())!;
+        return (await response.Content.ReadFromJsonAsync<LoginResponse>(JsonOptions))!;
     }
 
     /// <summary>Registers a fresh user and returns a client carrying its token.</summary>

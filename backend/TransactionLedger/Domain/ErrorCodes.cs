@@ -10,6 +10,8 @@ public static class ErrorCodes
     public const string ValidationFailed = "VALIDATION_FAILED";
     public const string InvalidCredentials = "INVALID_CREDENTIALS";
     public const string Unauthenticated = "UNAUTHENTICATED";
+    public const string NotFound = "NOT_FOUND";
     public const string EmailAlreadyRegistered = "EMAIL_ALREADY_REGISTERED";
+    public const string AccountNameTaken = "ACCOUNT_NAME_TAKEN";
     public const string InternalError = "INTERNAL_ERROR";
 }
