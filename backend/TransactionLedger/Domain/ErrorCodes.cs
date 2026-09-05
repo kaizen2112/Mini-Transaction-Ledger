@@ -21,5 +21,6 @@ public static class ErrorCodes
     public const string EmailAlreadyRegistered = "EMAIL_ALREADY_REGISTERED";
     public const string AccountNameTaken = "ACCOUNT_NAME_TAKEN";
     public const string InsufficientFunds = "INSUFFICIENT_FUNDS";
+    public const string SameAccountTransfer = "SAME_ACCOUNT_TRANSFER";
     public const string InternalError = "INTERNAL_ERROR";
 }

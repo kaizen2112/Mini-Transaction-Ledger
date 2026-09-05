@@ -92,6 +92,71 @@ public sealed class Transaction
             DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// Creates one leg of a transfer (BR-27). Both legs are real ledger
+    /// entries, not bookkeeping shortcuts, because the account's history must
+    /// explain its balance: a transfer represented only by a Transfers row
+    /// would show a balance change with no matching entry and break BR-17.
+    ///
+    /// Two differences from <see cref="Record"/>, both deliberate:
+    ///
+    ///   - Category is forced to Transfer. <see cref="GuardCategory"/> is not
+    ///     called, and must not be: BR-24 forbids a CLIENT from supplying a
+    ///     system-only category, not the system from assigning one.
+    ///   - OccurredAt is supplied rather than read from the clock, so both legs
+    ///     share one instant. Two separate DateTime.UtcNow reads could straddle
+    ///     a tick and sort the legs apart in history (BR-41).
+    /// </summary>
+    public static Transaction RecordTransferLeg(
+        Guid accountId,
+        TransactionType type,
+        decimal amount,
+        string? description,
+        DateTime occurredAt)
+    {
+        GuardAmount(amount);
+        var trimmed = GuardDescription(description);
+
+        return new Transaction(
+            Guid.CreateVersion7(),
+            accountId,
+            type,
+            amount,
+            TransactionCategory.Transfer,
+            trimmed,
+            occurredAt);
+    }
+
+    /// <summary>
+    /// Backfills the link to the parent transfer (docs/04 §3.4, circular FK
+    /// note). Transactions.TransferId and Transfers.DebitTransactionId point at
+    /// each other, so one side has to be written second.
+    ///
+    /// This is NOT a violation of BR-21. Immutability means a COMMITTED row is
+    /// never altered; this runs inside the same uncommitted transaction that
+    /// created the row, before anything is visible to any other session. The
+    /// guard below makes the one-shot nature explicit.
+    /// </summary>
+    public void AssignTransfer(Guid transferId)
+    {
+        if (TransferId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "This transaction already belongs to a transfer.");
+        }
+
+        TransferId = transferId;
+    }
+
+    /// <summary>
+    /// BR-03/04/05, exposed so a caller can reject a bad amount BEFORE opening
+    /// a transaction and taking row locks. Validating only inside
+    /// <see cref="Record"/> would still be correct — the rollback undoes
+    /// everything — but it would take exclusive locks on two accounts to
+    /// discover that the client sent a negative number.
+    /// </summary>
+    public static void ValidateAmount(decimal amount) => GuardAmount(amount);
+
     private static void GuardAmount(decimal amount)
     {
         // BR-03

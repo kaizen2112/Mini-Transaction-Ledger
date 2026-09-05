@@ -81,9 +81,21 @@ public sealed class TransactionConfiguration : IEntityTypeConfiguration<Transact
             .HasConstraintName("FK_Transactions_Reverses")
             .OnDelete(DeleteBehavior.Restrict);
 
-        // FK_Transactions_Transfers is deliberately NOT declared yet: the
-        // Transfers table does not exist until B8. The column and its index
-        // exist now so the shape matches §3.3; B8 adds the constraint.
+        // B8: the Transfers table now exists, so the constraint deferred in B6
+        // is declared here.
+        //
+        // This closes a CIRCULAR foreign key — Transactions.TransferId points
+        // at Transfers, and Transfers.DebitTransactionId points back at
+        // Transactions. Neither side can be inserted with both ends satisfied
+        // in a single statement, so TransferService writes in three steps
+        // (legs, then transfer, then backfill TransferId) inside ONE database
+        // transaction. Deferred constraints are unnecessary: nothing is visible
+        // to another session until that transaction commits (docs/04 §3.4).
+        builder.HasOne<Transfer>()
+            .WithMany()
+            .HasForeignKey(t => t.TransferId)
+            .HasConstraintName("FK_Transactions_Transfers")
+            .OnDelete(DeleteBehavior.Restrict);
 
         // BR-22, the double-reversal guard. PARTIAL, because PostgreSQL treats
         // NULLs as distinct in a unique index anyway and the overwhelming

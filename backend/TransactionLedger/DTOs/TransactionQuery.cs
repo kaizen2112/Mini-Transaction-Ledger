@@ -14,9 +14,11 @@ namespace TransactionLedger.DTOs;
 /// </summary>
 public sealed record TransactionQuery
 {
-    public const int DefaultPage = 1;
-    public const int DefaultPageSize = 20;
-    public const int MaxPageSize = 100;
+    // Shared with TransferQuery via PaginationRules, so the two histories
+    // cannot drift to different page-size ceilings (BR-39).
+    public const int DefaultPage = PaginationRules.DefaultPage;
+    public const int DefaultPageSize = PaginationRules.DefaultPageSize;
+    public const int MaxPageSize = PaginationRules.MaxPageSize;
     public const int MaxSearchLength = 100;
 
     public int Page { get; init; } = DefaultPage;
@@ -47,15 +49,7 @@ public sealed record TransactionQuery
     /// </summary>
     public void Validate()
     {
-        if (Page < 1)
-        {
-            throw Pagination($"page must be 1 or greater; received {Page}.");
-        }
-
-        if (PageSize < 1 || PageSize > MaxPageSize)
-        {
-            throw Pagination($"pageSize must be between 1 and {MaxPageSize}; received {PageSize}.");
-        }
+        PaginationRules.Validate(Page, PageSize);
 
         if (From.HasValue && To.HasValue && From > To)
         {
@@ -72,9 +66,6 @@ public sealed record TransactionQuery
             throw Range($"search must not exceed {MaxSearchLength} characters.");
         }
     }
-
-    private static DomainException Pagination(string detail) =>
-        new(ErrorCodes.PaginationInvalid, StatusCodes.Status400BadRequest, detail);
 
     private static DomainException Range(string detail) =>
         new(ErrorCodes.FilterRangeInvalid, StatusCodes.Status400BadRequest, detail);
