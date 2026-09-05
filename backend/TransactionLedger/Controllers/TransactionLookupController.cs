@@ -39,4 +39,36 @@ public sealed class TransactionLookupController : ControllerBase
 
         return Ok(transaction);
     }
+
+    /// <summary>
+    /// POST /api/transactions/{transactionId}/reverse (contract §5).
+    ///
+    /// This is the ONLY way to correct a mistake, and it is a POST that creates
+    /// a new row — not a PUT or a DELETE on the original (BR-21). The body is
+    /// optional, hence the nullable binding: a reversal derives its amount,
+    /// type and account from what it reverses, so there is nothing the caller
+    /// must supply.
+    ///
+    /// No Idempotency-Key: the unique index on ReversesTransactionId makes a
+    /// repeat impossible by construction, and it returns ALREADY_REVERSED.
+    /// </summary>
+    [HttpPost("{transactionId:guid}/reverse")]
+    [ProducesResponseType(typeof(TransactionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Reverse(
+        Guid transactionId,
+        [FromBody] ReverseTransactionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var reversal = await _transactionService.ReverseAsync(
+            User.GetUserId(),
+            transactionId,
+            request,
+            cancellationToken);
+
+        // 201 returns the REVERSAL row, which is what was created.
+        return Created($"/api/transactions/{reversal.Id}", reversal);
+    }
 }

@@ -128,6 +128,52 @@ public sealed class Transaction
     }
 
     /// <summary>
+    /// Creates the compensating entry that cancels <paramref name="original"/>
+    /// (BR-22): opposite type, equal amount, category Reversal, linked back to
+    /// what it undoes.
+    ///
+    /// The link is stored HERE, on the reversal, and never as a
+    /// "ReversedByTransactionId" on the original — writing that column would
+    /// mean updating the original row, which BR-21 forbids. Pointing backwards
+    /// keeps every row write-once, and "has this been reversed?" becomes a
+    /// question the query answers (an EXISTS against UX_Transactions_Reverses)
+    /// rather than a flag someone has to remember to set.
+    ///
+    /// The eligibility rules of BR-23 are NOT checked here. They need the
+    /// database (has it already been reversed? would the balance go negative?)
+    /// and belong to the service, under the row lock.
+    /// </summary>
+    public static Transaction Reverse(Transaction original, string? description)
+    {
+        var opposite = original.Type switch
+        {
+            TransactionType.Credit => TransactionType.Debit,
+            TransactionType.Debit => TransactionType.Credit,
+            _ => throw new InvalidOperationException($"Unknown transaction type {original.Type}.")
+        };
+
+        var trimmed = GuardDescription(description)
+                      ?? $"Reversal of {original.Type} {original.Amount:0.00}";
+
+        return new Transaction(
+            Guid.CreateVersion7(),
+            original.AccountId,
+            opposite,
+            // Equal amount, not a recomputed one: the reversal must net the
+            // original to exactly zero (BR-22).
+            original.Amount,
+            TransactionCategory.Reversal,
+            trimmed,
+            // BR-26: the reversal happens NOW. It does not inherit the
+            // original's timestamp — that would backdate a correction into
+            // history and make the account's own statement misleading.
+            DateTime.UtcNow)
+        {
+            ReversesTransactionId = original.Id
+        };
+    }
+
+    /// <summary>
     /// Backfills the link to the parent transfer (docs/04 §3.4, circular FK
     /// note). Transactions.TransferId and Transfers.DebitTransactionId point at
     /// each other, so one side has to be written second.

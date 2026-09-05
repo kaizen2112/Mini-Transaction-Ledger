@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using TransactionLedger.Data;
 using TransactionLedger.Domain;
 using TransactionLedger.DTOs;
@@ -172,6 +173,152 @@ public sealed class TransactionService : ITransactionService
 
         return result ?? throw NotFound();
     }
+
+    /// <summary>
+    /// POST /api/transactions/{transactionId}/reverse (contract §5).
+    ///
+    ///   1. open a transaction                                    (BR-19)
+    ///   2. load the original, ownership in the predicate         (BR-07/08)
+    ///   3. eligibility checks 2-4 of BR-23
+    ///   4. lock the account                                      (BR-29)
+    ///   5. eligibility check 5: would this overdraw?             (BR-20/23)
+    ///   6. insert the compensating entry                         (BR-22)
+    ///   7. update the balance                                    (BR-17)
+    ///   8. audit                                                 (BR-36)
+    ///   9. commit
+    ///
+    /// The original row is read and never written. Nothing in this method
+    /// mutates it — not even a "reversed" flag, because there is no such column
+    /// by design (BR-21). Its isReversed projection flips purely because a new
+    /// row now points at it.
+    ///
+    /// No idempotency key (contract §5): the unique index makes this operation
+    /// idempotent by construction, and a repeat returns ALREADY_REVERSED.
+    /// </summary>
+    public async Task<TransactionResponse> ReverseAsync(
+        Guid userId,
+        Guid transactionId,
+        ReverseTransactionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        await using var databaseTransaction =
+            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // 2. BR-23 check 1, as a predicate rather than a post-load test
+        //    (BR-07). A transaction on someone else's account is a 404,
+        //    identical to one that does not exist (BR-08).
+        var original = await (
+            from transaction in _dbContext.Transactions
+            join owner in _dbContext.Accounts
+                on transaction.AccountId equals owner.Id
+            where transaction.Id == transactionId && owner.UserId == userId
+            select transaction).SingleOrDefaultAsync(cancellationToken);
+
+        if (original is null)
+        {
+            throw NotFound();
+        }
+
+        // 3. BR-23 check 2. A reversal of a reversal is just the original
+        //    effect again, and allowing it creates unbounded chains. A user who
+        //    genuinely wants that records a new transaction.
+        if (original.ReversesTransactionId.HasValue)
+        {
+            throw new DomainException(
+                ErrorCodes.CannotReverseAReversal,
+                StatusCodes.Status409Conflict,
+                "A reversal cannot itself be reversed.");
+        }
+
+        // BR-23 check 4. Reversing one leg of a transfer would create or
+        // destroy money across two accounts. Reversing a whole transfer is
+        // coherent but deliberately out of scope for this version.
+        if (original.TransferId.HasValue)
+        {
+            throw new DomainException(
+                ErrorCodes.TransferLegNotReversible,
+                StatusCodes.Status409Conflict,
+                "A transfer leg cannot be reversed on its own.");
+        }
+
+        // BR-23 check 3. This is the FRIENDLY guard, not the real one: two
+        // concurrent requests can both pass it before either commits. The
+        // unique index below is what actually makes double reversal impossible
+        // (BR-22, BR-11).
+        var alreadyReversed = await _dbContext.Transactions
+            .AsNoTracking()
+            .AnyAsync(t => t.ReversesTransactionId == original.Id, cancellationToken);
+
+        if (alreadyReversed)
+        {
+            throw AlreadyReversed();
+        }
+
+        // 4. Lock the account before reading the balance to change it (BR-29).
+        var account = await LockAccountAsync(userId, original.AccountId, cancellationToken)
+                      ?? throw NotFound();
+
+        var reversal = Transaction.Reverse(original, request?.Description);
+
+        // 5. BR-23 check 5. Reversing a CREDIT removes money that may already
+        //    have been spent; the overdraft rule is absolute (BR-20), so the
+        //    reversal is refused and the user must fund the account first.
+        if (account.WouldOverdraw(reversal.Type, reversal.Amount))
+        {
+            throw new DomainException(
+                ErrorCodes.InsufficientFunds,
+                StatusCodes.Status409Conflict,
+                $"Account balance is {account.Balance:0.00}; reversing this transaction requires {reversal.Amount:0.00}.");
+        }
+
+        // 6/7. Insert the compensating entry and apply it. The original is
+        //      still untouched: `original` was loaded but never assigned to.
+        _dbContext.Transactions.Add(reversal);
+        account.Apply(reversal);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsDoubleReversal(ex))
+        {
+            // The real guard firing (BR-22). Reached when a concurrent request
+            // committed its reversal between our AnyAsync above and this
+            // INSERT. Translated rather than surfaced, per BR-11: the database
+            // decides, the application explains.
+            throw AlreadyReversed();
+        }
+
+        // 8. Audit inside the same transaction (BR-36).
+        await _auditService.RecordAsync(
+            userId,
+            AuditActions.TransactionReversed,
+            nameof(Transaction),
+            reversal.Id,
+            new { OriginalTransactionId = original.Id, reversal.AccountId },
+            cancellationToken);
+
+        // 9.
+        await databaseTransaction.CommitAsync(cancellationToken);
+
+        // The reversal row is what was created, so it is what 201 returns
+        // (contract §5). It is not itself reversed.
+        return Map(reversal, isReversed: false);
+    }
+
+    /// <summary>
+    /// BR-22: the partial unique index UX_Transactions_Reverses is the only
+    /// double-reversal guard that holds under concurrency, so its violation is
+    /// translated to the contract's code rather than escaping as a 500.
+    /// </summary>
+    private static bool IsDoubleReversal(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: "23505" } postgres
+        && postgres.ConstraintName == "UX_Transactions_Reverses";
+
+    private static DomainException AlreadyReversed() => new(
+        ErrorCodes.AlreadyReversed,
+        StatusCodes.Status409Conflict,
+        "This transaction has already been reversed.");
 
     /// <summary>BR-42. Each filter is applied only when supplied.</summary>
     private static IQueryable<Transaction> ApplyFilters(IQueryable<Transaction> source, TransactionQuery query)

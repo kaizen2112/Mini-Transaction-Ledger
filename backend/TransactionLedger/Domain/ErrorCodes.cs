@@ -22,5 +22,8 @@ public static class ErrorCodes
     public const string AccountNameTaken = "ACCOUNT_NAME_TAKEN";
     public const string InsufficientFunds = "INSUFFICIENT_FUNDS";
     public const string SameAccountTransfer = "SAME_ACCOUNT_TRANSFER";
+    public const string AlreadyReversed = "ALREADY_REVERSED";
+    public const string CannotReverseAReversal = "CANNOT_REVERSE_A_REVERSAL";
+    public const string TransferLegNotReversible = "TRANSFER_LEG_NOT_REVERSIBLE";
     public const string InternalError = "INTERNAL_ERROR";
 }

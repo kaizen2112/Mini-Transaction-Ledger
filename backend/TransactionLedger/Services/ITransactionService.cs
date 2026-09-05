@@ -20,4 +20,10 @@ public interface ITransactionService
         Guid userId,
         Guid transactionId,
         CancellationToken cancellationToken);
+
+    Task<TransactionResponse> ReverseAsync(
+        Guid userId,
+        Guid transactionId,
+        ReverseTransactionRequest? request,
+        CancellationToken cancellationToken);
 }
