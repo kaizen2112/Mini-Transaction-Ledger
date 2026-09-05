@@ -9,4 +9,15 @@ public interface ITransactionService
         Guid accountId,
         CreateTransactionRequest request,
         CancellationToken cancellationToken);
+
+    Task<PagedResponse<TransactionResponse>> ListAsync(
+        Guid userId,
+        Guid accountId,
+        TransactionQuery query,
+        CancellationToken cancellationToken);
+
+    Task<TransactionResponse> GetAsync(
+        Guid userId,
+        Guid transactionId,
+        CancellationToken cancellationToken);
 }

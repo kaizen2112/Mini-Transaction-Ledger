@@ -13,6 +13,8 @@ public static class ErrorCodes
     public const string AmountScaleInvalid = "AMOUNT_SCALE_INVALID";
     public const string DescriptionTooLong = "DESCRIPTION_TOO_LONG";
     public const string CategorySystemOnly = "CATEGORY_SYSTEM_ONLY";
+    public const string PaginationInvalid = "PAGINATION_INVALID";
+    public const string FilterRangeInvalid = "FILTER_RANGE_INVALID";
     public const string InvalidCredentials = "INVALID_CREDENTIALS";
     public const string Unauthenticated = "UNAUTHENTICATED";
     public const string NotFound = "NOT_FOUND";

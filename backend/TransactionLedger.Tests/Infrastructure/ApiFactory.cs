@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace TransactionLedger.Tests.Infrastructure;
 
@@ -16,6 +17,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public const string JwtKey = "test-signing-key-that-is-long-enough-32+";
     public const string JwtIssuer = "transaction-ledger-tests";
     public const string JwtAudience = "transaction-ledger-tests-web";
+
+    /// <summary>Records the SQL EF sends, for H8 (BR-40).</summary>
+    public SqlCapture SqlCapture { get; } = new();
 
     private readonly string _connectionString;
 
@@ -37,9 +41,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Database:RunMigrationsOnStartup"] = "true",
                 ["Jwt:Key"] = JwtKey,
                 ["Jwt:Issuer"] = JwtIssuer,
-                ["Jwt:Audience"] = JwtAudience
+                ["Jwt:Audience"] = JwtAudience,
+                // EF logs command text at Information; SqlCapture reads it.
+                ["Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command"] = "Information"
             });
         });
+
+        builder.ConfigureLogging(logging => logging.AddProvider(SqlCapture));
 
         builder.ConfigureTestServices(services =>
         {

@@ -105,6 +105,151 @@ public sealed class TransactionService : ITransactionService
     }
 
     /// <summary>
+    /// GET /api/accounts/{accountId}/transactions (contract §5).
+    ///
+    /// Every filter, the ordering, the count and the page slice execute in
+    /// PostgreSQL (BR-40). Nothing is materialised before Skip/Take — an
+    /// in-memory Skip still transfers every row over the wire, which works
+    /// with 50 rows and dies with 500,000.
+    /// </summary>
+    public async Task<PagedResponse<TransactionResponse>> ListAsync(
+        Guid userId,
+        Guid accountId,
+        TransactionQuery query,
+        CancellationToken cancellationToken)
+    {
+        query.Validate();
+
+        // BR-08: a foreign or missing account is a 404 before any history is
+        // exposed. Checked separately from the transaction query so that an
+        // owned account with no transactions still returns 200 with an empty
+        // page — an empty result and "not yours" must not look the same.
+        var ownsAccount = await _dbContext.Accounts
+            .AsNoTracking()
+            .AnyAsync(a => a.Id == accountId && a.UserId == userId, cancellationToken);
+
+        if (!ownsAccount)
+        {
+            throw NotFound();
+        }
+
+        var filtered = ApplyFilters(
+            _dbContext.Transactions.AsNoTracking().Where(t => t.AccountId == accountId),
+            query);
+
+        // COUNT(*) over the filtered set, still in SQL.
+        var totalItems = await filtered.CountAsync(cancellationToken);
+
+        var items = await Project(OrderForHistory(filtered))
+            .Skip(query.Skip)
+            .Take(query.PageSize)
+            .ToListAsync(cancellationToken);
+
+        return PagedResponse<TransactionResponse>.Create(
+            items,
+            query.Page,
+            query.PageSize,
+            totalItems);
+    }
+
+    /// <summary>
+    /// GET /api/transactions/{transactionId} (contract §5). Ownership is
+    /// checked through the join to Accounts (BR-07) — the predicate, not a
+    /// post-load check.
+    /// </summary>
+    public async Task<TransactionResponse> GetAsync(
+        Guid userId,
+        Guid transactionId,
+        CancellationToken cancellationToken)
+    {
+        var owned = from transaction in _dbContext.Transactions.AsNoTracking()
+                    join account in _dbContext.Accounts.AsNoTracking()
+                        on transaction.AccountId equals account.Id
+                    where transaction.Id == transactionId && account.UserId == userId
+                    select transaction;
+
+        var result = await Project(owned).SingleOrDefaultAsync(cancellationToken);
+
+        return result ?? throw NotFound();
+    }
+
+    /// <summary>BR-42. Each filter is applied only when supplied.</summary>
+    private static IQueryable<Transaction> ApplyFilters(IQueryable<Transaction> source, TransactionQuery query)
+    {
+        if (query.Type.HasValue)
+        {
+            source = source.Where(t => t.Type == query.Type.Value);
+        }
+
+        if (query.Category.HasValue)
+        {
+            source = source.Where(t => t.Category == query.Category.Value);
+        }
+
+        // Inclusive UTC bounds on OccurredAt.
+        if (query.From.HasValue)
+        {
+            source = source.Where(t => t.OccurredAt >= query.From.Value);
+        }
+
+        if (query.To.HasValue)
+        {
+            source = source.Where(t => t.OccurredAt <= query.To.Value);
+        }
+
+        if (query.MinAmount.HasValue)
+        {
+            source = source.Where(t => t.Amount >= query.MinAmount.Value);
+        }
+
+        if (query.MaxAmount.HasValue)
+        {
+            source = source.Where(t => t.Amount <= query.MaxAmount.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            // EF.Functions.ILike maps to PostgreSQL ILIKE, so the match is
+            // case-insensitive in the database rather than by pulling rows
+            // into memory. It cannot use a B-tree index; documented and
+            // accepted at this scale (BR-42, NFR-04).
+            var pattern = $"%{query.Search.Trim()}%";
+            source = source.Where(t => t.Description != null && EF.Functions.ILike(t.Description, pattern));
+        }
+
+        return source;
+    }
+
+    /// <summary>
+    /// BR-41: always OccurredAt DESC, Id DESC. The tiebreak on Id is what
+    /// makes the ordering total — two rows in the same millisecond would
+    /// otherwise have undefined relative order, so one could appear on both
+    /// page 1 and page 2, or on neither. This matches
+    /// IX_Transactions_Account_Occurred exactly, so the page is an index scan
+    /// with no sort node.
+    /// </summary>
+    private static IQueryable<Transaction> OrderForHistory(IQueryable<Transaction> source) =>
+        source.OrderByDescending(t => t.OccurredAt).ThenByDescending(t => t.Id);
+
+    /// <summary>
+    /// IsReversed is computed by the query, never stored, because the original
+    /// row is never mutated (BR-21). This becomes an EXISTS against the
+    /// partial unique index UX_Transactions_Reverses.
+    /// </summary>
+    private IQueryable<TransactionResponse> Project(IQueryable<Transaction> source) =>
+        source.Select(t => new TransactionResponse(
+            t.Id,
+            t.AccountId,
+            t.Type,
+            t.Amount,
+            t.Category,
+            t.Description,
+            t.OccurredAt,
+            t.ReversesTransactionId,
+            _dbContext.Transactions.Any(r => r.ReversesTransactionId == t.Id),
+            t.TransferId));
+
+    /// <summary>
     /// BR-29: issued as raw SQL because FOR UPDATE has no LINQ equivalent.
     ///
     /// ToListAsync rather than SingleOrDefaultAsync on purpose: the latter

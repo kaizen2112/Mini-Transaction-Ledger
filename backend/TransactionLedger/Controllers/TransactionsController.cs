@@ -45,9 +45,34 @@ public sealed class TransactionsController : ControllerBase
             request,
             cancellationToken);
 
-        // No Location header yet: it must point at GET /api/transactions/{id},
-        // which arrives in B7. Emitting a header that resolves to 404 would be
-        // worse than omitting it; B7 turns this into CreatedAtAction.
-        return StatusCode(StatusCodes.Status201Created, transaction);
+        // B7 note: the Location header now has a real target, so this points
+        // at GET /api/transactions/{id} on the sibling controller.
+        return Created($"/api/transactions/{transaction.Id}", transaction);
+    }
+
+    /// <summary>
+    /// GET /api/accounts/{accountId}/transactions (contract §5).
+    ///
+    /// [FromQuery] binds page, pageSize and every BR-42 filter. An
+    /// out-of-range page is not an error: a page past the last one returns 200
+    /// with an empty items array and correct metadata.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(PagedResponse<TransactionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> List(
+        Guid accountId,
+        [FromQuery] TransactionQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = await _transactionService.ListAsync(
+            User.GetUserId(),
+            accountId,
+            query,
+            cancellationToken);
+
+        return Ok(page);
     }
 }
