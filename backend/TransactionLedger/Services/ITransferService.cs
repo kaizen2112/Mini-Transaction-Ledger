@@ -4,9 +4,10 @@ namespace TransactionLedger.Services;
 
 public interface ITransferService
 {
-    Task<TransferResponse> CreateAsync(
+    Task<IdempotentResult<TransferResponse>> CreateAsync(
         Guid userId,
         CreateTransferRequest request,
+        string? idempotencyKey,
         CancellationToken cancellationToken);
 
     Task<PagedResponse<TransferResponse>> ListAsync(

@@ -227,7 +227,7 @@ public sealed class TransferTests : IntegrationTestBase
     [Fact]
     public async Task Transfers_endpoint_without_a_token_returns_401()
     {
-        var response = await Client.PostAsJsonAsync("/api/transfers", new
+        var response = await Client.PostWithKeyAsync("/api/transfers", new
         {
             sourceAccountId = Guid.CreateVersion7(),
             destinationAccountId = Guid.CreateVersion7(),
@@ -302,7 +302,7 @@ public sealed class TransferTests : IntegrationTestBase
 
     private async Task FundAsync(Guid accountId, decimal amount, HttpClient? client = null)
     {
-        var response = await (client ?? AuthedClient).PostAsJsonAsync(
+        var response = await (client ?? AuthedClient).PostWithKeyAsync(
             $"/api/accounts/{accountId}/transactions",
             new { type = "Credit", amount, category = "Salary" });
 
@@ -315,7 +315,7 @@ public sealed class TransferTests : IntegrationTestBase
         decimal amount,
         string? description = null,
         HttpClient? client = null) =>
-        (client ?? AuthedClient).PostAsJsonAsync("/api/transfers", new
+        (client ?? AuthedClient).PostWithKeyAsync("/api/transfers", new
         {
             sourceAccountId,
             destinationAccountId,

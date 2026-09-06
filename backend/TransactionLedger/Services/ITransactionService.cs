@@ -4,10 +4,11 @@ namespace TransactionLedger.Services;
 
 public interface ITransactionService
 {
-    Task<TransactionResponse> CreateAsync(
+    Task<IdempotentResult<TransactionResponse>> CreateAsync(
         Guid userId,
         Guid accountId,
         CreateTransactionRequest request,
+        string? idempotencyKey,
         CancellationToken cancellationToken);
 
     Task<PagedResponse<TransactionResponse>> ListAsync(

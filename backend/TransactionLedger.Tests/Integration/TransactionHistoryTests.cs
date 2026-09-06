@@ -353,7 +353,7 @@ public sealed class TransactionHistoryTests : IntegrationTestBase
         string category,
         string? description)
     {
-        var response = await AuthedClient.PostAsJsonAsync(
+        var response = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{accountId}/transactions",
             new { type, amount, category, description });
 

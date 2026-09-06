@@ -30,6 +30,8 @@ public sealed class AppDbContext : DbContext
     /// </summary>
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<IdempotencyKey> IdempotencyKeys => Set<IdempotencyKey>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

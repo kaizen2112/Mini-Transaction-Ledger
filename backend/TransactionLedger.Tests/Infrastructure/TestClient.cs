@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using TransactionLedger.Domain;
 using TransactionLedger.DTOs;
 
 namespace TransactionLedger.Tests.Infrastructure;
@@ -28,6 +29,35 @@ public static class TestClient
 
     public static string UniqueEmail(string prefix = "user") =>
         $"{prefix}-{Guid.NewGuid():N}@example.com";
+
+    /// <summary>A fresh key, long enough for BR-33's 8-128 character bound.</summary>
+    public static string NewIdempotencyKey() => Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// POST with an Idempotency-Key header, required on the two money-moving
+    /// endpoints since B11 (BR-32).
+    ///
+    /// Defaults to a FRESH key per call, so every existing test keeps meaning
+    /// what it meant: each call is a distinct user action. Tests that are
+    /// actually about retries pass the same key twice explicitly.
+    /// </summary>
+    public static Task<HttpResponseMessage> PostWithKeyAsync(
+        this HttpClient client,
+        string url,
+        object body,
+        string? idempotencyKey = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(body, options: JsonOptions)
+        };
+
+        request.Headers.Add(
+            IdempotencyHeader.Name,
+            idempotencyKey ?? NewIdempotencyKey());
+
+        return client.SendAsync(request);
+    }
 
     public static async Task<RegisterResponse> RegisterAsync(
         HttpClient client,

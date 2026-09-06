@@ -107,7 +107,7 @@ public sealed class TransactionTests : IntegrationTestBase
         var backdated = new DateTime(1999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         var before = DateTime.UtcNow.AddSeconds(-5);
-        var response = await AuthedClient.PostAsJsonAsync(
+        var response = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{account.Id}/transactions",
             new
             {
@@ -194,7 +194,7 @@ public sealed class TransactionTests : IntegrationTestBase
         var (userB, _) = await TestClient.AuthedClientAsync(Factory);
         using var b = userB;
 
-        var response = await userB.PostAsJsonAsync(
+        var response = await userB.PostWithKeyAsync(
             $"/api/accounts/{account.Id}/transactions",
             new { type = "Credit", amount = 100m, category = "Salary" });
 
@@ -218,7 +218,7 @@ public sealed class TransactionTests : IntegrationTestBase
     {
         var account = await CreateAccountAsync("Anonymous");
 
-        var response = await Client.PostAsJsonAsync(
+        var response = await Client.PostWithKeyAsync(
             $"/api/accounts/{account.Id}/transactions",
             new { type = "Credit", amount = 10m, category = "Salary" });
 
@@ -231,7 +231,7 @@ public sealed class TransactionTests : IntegrationTestBase
     {
         var account = await CreateAccountAsync("Shape");
 
-        var response = await AuthedClient.PostAsJsonAsync(
+        var response = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{account.Id}/transactions",
             new
             {
@@ -246,7 +246,7 @@ public sealed class TransactionTests : IntegrationTestBase
 
         await PostAsync(account.Id, "Credit", 500m);
 
-        var raw = await AuthedClient.PostAsJsonAsync(
+        var raw = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{account.Id}/transactions",
             new
             {
@@ -284,7 +284,7 @@ public sealed class TransactionTests : IntegrationTestBase
         string type,
         decimal amount,
         string category = "Salary") =>
-        AuthedClient.PostAsJsonAsync(
+        AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{accountId}/transactions",
             new { type, amount, category });
 

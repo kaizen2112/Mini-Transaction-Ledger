@@ -10,11 +10,16 @@ public sealed class TransferService : ITransferService
 {
     private readonly AppDbContext _dbContext;
     private readonly IAuditService _auditService;
+    private readonly IIdempotencyService _idempotencyService;
 
-    public TransferService(AppDbContext dbContext, IAuditService auditService)
+    public TransferService(
+        AppDbContext dbContext,
+        IAuditService auditService,
+        IIdempotencyService idempotencyService)
     {
         _dbContext = dbContext;
         _auditService = auditService;
+        _idempotencyService = idempotencyService;
     }
 
     /// <summary>
@@ -25,6 +30,7 @@ public sealed class TransferService : ITransferService
     ///
     ///   0. reject same-account and bad amounts BEFORE any lock   (BR-27, BR-03)
     ///   1. open one explicit database transaction                (BR-19, BR-28)
+    ///   1a. INSERT the idempotency key                           (BR-34)
     ///   2. lock BOTH accounts, ORDER BY "Id" FOR UPDATE          (BR-29, BR-30)
     ///   3. both rows present? if not, 404                        (BR-07, BR-08)
     ///   4. overdraft check on the source                         (BR-20)
@@ -33,6 +39,7 @@ public sealed class TransferService : ITransferService
     ///   7. backfill TransferId on both legs                      (docs/04 §3.4)
     ///   8. update both balances                                  (BR-17)
     ///   9. audit                                                 (BR-36)
+    ///   9a. store the response on the key row                    (BR-34)
     ///  10. commit — one commit, so all of it or none of it       (BR-28)
     ///
     /// Step 2 is where this differs from a single credit or debit. Locking two
@@ -48,9 +55,38 @@ public sealed class TransferService : ITransferService
     /// the committed balance, instead of failing and needing a retry policy
     /// that would itself need idempotency to be already correct.
     /// </summary>
-    public async Task<TransferResponse> CreateAsync(
+    public async Task<IdempotentResult<TransferResponse>> CreateAsync(
         Guid userId,
         CreateTransferRequest request,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var key = IdempotencyKey.ValidateKey(idempotencyKey);
+
+        try
+        {
+            var created = await CreateCoreAsync(userId, request, key, cancellationToken);
+
+            return new IdempotentResult<TransferResponse>(created, IsReplay: false);
+        }
+        catch (DbUpdateException ex) when (_idempotencyService.IsKeyConflict(ex))
+        {
+            // Step 4 of BR-34 — see the twin comment in TransactionService.
+            var replayed = await _idempotencyService.ReplayAsync<TransferResponse>(
+                userId,
+                IdempotencyService.TransfersEndpoint,
+                key,
+                request,
+                cancellationToken);
+
+            return new IdempotentResult<TransferResponse>(replayed, IsReplay: true);
+        }
+    }
+
+    private async Task<TransferResponse> CreateCoreAsync(
+        Guid userId,
+        CreateTransferRequest request,
+        string key,
         CancellationToken cancellationToken)
     {
         // 0. Cheap request-shape checks first. Both are pure functions of the
@@ -72,6 +108,15 @@ public sealed class TransferService : ITransferService
         // 1. One transaction around everything below (BR-19, BR-28).
         await using var databaseTransaction =
             await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // 1a. Claim the key before touching either account (BR-34), so a retry
+        //     queues on the key rather than on the accounts.
+        var claim = await _idempotencyService.ClaimAsync(
+            userId,
+            IdempotencyService.TransfersEndpoint,
+            key,
+            request,
+            cancellationToken);
 
         // 2. Both accounts locked in one statement, in ascending ID order
         //    (BR-30), with ownership in the predicate (BR-07).
@@ -155,12 +200,21 @@ public sealed class TransferService : ITransferService
             new { transfer.SourceAccountId, transfer.DestinationAccountId },
             cancellationToken);
 
+        var response = Map(transfer);
+
+        // 9a. Store the response for a future replay (BR-34).
+        await _idempotencyService.CompleteAsync(
+            claim,
+            StatusCodes.Status201Created,
+            response,
+            cancellationToken);
+
         // 10. One commit. Any throw above — including a constraint violation on
         //     the credit leg — rolls back every write, so the source can never
         //     be debited for money the destination never received (BR-28).
         await databaseTransaction.CommitAsync(cancellationToken);
 
-        return Map(transfer);
+        return response;
     }
 
     /// <summary>

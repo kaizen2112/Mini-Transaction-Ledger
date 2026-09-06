@@ -83,7 +83,7 @@ public sealed class AuditLogTests : IntegrationTestBase
         var before = await CountAsync(AuditAction.TransactionCreated);
 
         // Overdraft: rejected with 409 after the transaction has been opened.
-        var response = await AuthedClient.PostAsJsonAsync(
+        var response = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{account.Id}/transactions",
             new { type = "Debit", amount = 5000m, category = "Food" });
 
@@ -104,7 +104,7 @@ public sealed class AuditLogTests : IntegrationTestBase
 
         var before = await CountAsync(AuditAction.TransferCreated);
 
-        var response = await AuthedClient.PostAsJsonAsync("/api/transfers", new
+        var response = await AuthedClient.PostWithKeyAsync("/api/transfers", new
         {
             sourceAccountId = source.Id,
             destinationAccountId = destination.Id,
@@ -242,7 +242,7 @@ public sealed class AuditLogTests : IntegrationTestBase
         string type,
         decimal amount)
     {
-        var response = await AuthedClient.PostAsJsonAsync(
+        var response = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{accountId}/transactions",
             new { type, amount, category = "Salary" });
 
@@ -261,7 +261,7 @@ public sealed class AuditLogTests : IntegrationTestBase
 
     private async Task TransferAsync(Guid sourceAccountId, Guid destinationAccountId, decimal amount)
     {
-        var response = await AuthedClient.PostAsJsonAsync("/api/transfers", new
+        var response = await AuthedClient.PostWithKeyAsync("/api/transfers", new
         {
             sourceAccountId,
             destinationAccountId,

@@ -147,7 +147,7 @@ public sealed class ReversalTests : IntegrationTestBase
         var source = await FundedAccountAsync("R6 source", 500m);
         var destination = await CreateAccountAsync("R6 destination");
 
-        var transferResponse = await AuthedClient.PostAsJsonAsync("/api/transfers", new
+        var transferResponse = await AuthedClient.PostWithKeyAsync("/api/transfers", new
         {
             sourceAccountId = source.Id,
             destinationAccountId = destination.Id,
@@ -305,7 +305,7 @@ public sealed class ReversalTests : IntegrationTestBase
         string category = "Salary",
         string? description = null)
     {
-        var response = await AuthedClient.PostAsJsonAsync(
+        var response = await AuthedClient.PostWithKeyAsync(
             $"/api/accounts/{accountId}/transactions",
             new { type, amount, category, description });
 

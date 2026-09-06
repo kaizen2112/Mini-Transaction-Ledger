@@ -11,23 +11,30 @@ public sealed class TransactionService : ITransactionService
 {
     private readonly AppDbContext _dbContext;
     private readonly IAuditService _auditService;
+    private readonly IIdempotencyService _idempotencyService;
 
-    public TransactionService(AppDbContext dbContext, IAuditService auditService)
+    public TransactionService(
+        AppDbContext dbContext,
+        IAuditService auditService,
+        IIdempotencyService idempotencyService)
     {
         _dbContext = dbContext;
         _auditService = auditService;
+        _idempotencyService = idempotencyService;
     }
 
     /// <summary>
     /// The order of the steps below is the whole point of this method.
     ///
     ///   1. open an explicit database transaction        (BR-19)
+    ///   1a. INSERT the idempotency key                  (BR-34)
     ///   2. SELECT the account FOR UPDATE, with ownership
     ///      in the predicate                             (BR-29, BR-07)
     ///   3. check the overdraft rule if this is a debit  (BR-20)
     ///   4. insert the transaction row
     ///   5. update the stored balance                    (BR-17)
     ///   6. write an audit entry                         (BR-36)
+    ///   6a. store the response on the key row           (BR-34)
     ///   7. commit
     ///
     /// Without step 2 this method loses updates. Two concurrent debits of 60
@@ -37,19 +44,69 @@ public sealed class TransactionService : ITransactionService
     /// and correctly refuses. Steps 4-6 share one commit so a crash between
     /// them cannot leave a transaction row without its balance change, which
     /// would violate BR-17 permanently and silently.
+    ///
+    /// Step 1a comes BEFORE the account lock deliberately: a duplicate retry
+    /// should queue on the key it is duplicating, not on the account, so it
+    /// never competes with unrelated traffic to the same account. And because
+    /// it is inside the transaction, a request that fails at step 3 rolls the
+    /// key back too — a rejected overdraft does not burn the key (BR-34, I6).
     /// </summary>
-    public async Task<TransactionResponse> CreateAsync(
+    public async Task<IdempotentResult<TransactionResponse>> CreateAsync(
         Guid userId,
         Guid accountId,
         CreateTransactionRequest request,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var key = IdempotencyKey.ValidateKey(idempotencyKey);
+
+        try
+        {
+            var created = await CreateCoreAsync(userId, accountId, request, key, cancellationToken);
+
+            return new IdempotentResult<TransactionResponse>(created, IsReplay: false);
+        }
+        catch (DbUpdateException ex) when (_idempotencyService.IsKeyConflict(ex))
+        {
+            // Step 4 of BR-34. The `await using` inside CreateCoreAsync has
+            // already rolled the transaction back on the way out, so the read
+            // below sees only what the winning request committed.
+            var replayed = await _idempotencyService.ReplayAsync<TransactionResponse>(
+                userId,
+                IdempotencyService.TransactionsEndpoint,
+                key,
+                request,
+                cancellationToken);
+
+            return new IdempotentResult<TransactionResponse>(replayed, IsReplay: true);
+        }
+    }
+
+    private async Task<TransactionResponse> CreateCoreAsync(
+        Guid userId,
+        Guid accountId,
+        CreateTransactionRequest request,
+        string key,
         CancellationToken cancellationToken)
     {
         // 1. Explicit transaction. Everything below either commits together or
         //    rolls back together (BR-19).
 
-        // Equivalent to 'BEGIN'  
+        // Equivalent to 'BEGIN'
         await using var databaseTransaction =
             await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // 1a. Claim the key (BR-34). A concurrent duplicate BLOCKS on the
+        //     unique index here until this transaction commits or rolls back —
+        //     that is the mutual exclusion, and it needs no application lock.
+
+        // claims the idempotency key
+        var claim = await _idempotencyService.ClaimAsync(
+            userId,
+            IdempotencyService.TransactionsEndpoint,
+            key,
+            request,
+            cancellationToken);
 
         // 2. Exclusive row lock, with ownership as part of the predicate
         //    (BR-07/BR-29). A foreign or missing account yields no row, so
@@ -108,12 +165,23 @@ public sealed class TransactionService : ITransactionService
             new { transaction.AccountId, Type = transaction.Type.ToString() },
             cancellationToken);
 
+        var response = Map(transaction, isReversed: false);
+
+        // 6a. Store what this request returned, so a retry can replay it
+        //     byte-for-byte instead of moving money again (BR-34).
+        // store the idempotency key so it can checked again
+        await _idempotencyService.CompleteAsync(
+            claim,
+            StatusCodes.Status201Created,
+            response,
+            cancellationToken);
+
         // 7. Commit. The lock is released here.
         // Equivalent o 'COMMIT' by fulfilling Database atomic transaction
 
         await databaseTransaction.CommitAsync(cancellationToken);
 
-        return Map(transaction, isReversed: false);
+        return response;
     }
 
     /// <summary>
