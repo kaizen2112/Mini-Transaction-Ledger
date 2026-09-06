@@ -13,10 +13,12 @@ public sealed class AccountService : IAccountService
     private const string NameUniqueIndexName = "UX_Accounts_User_NameLower";
 
     private readonly AppDbContext _dbContext;
+    private readonly IAuditService _auditService;
 
-    public AccountService(AppDbContext dbContext)
+    public AccountService(AppDbContext dbContext, IAuditService auditService)
     {
         _dbContext = dbContext;
+        _auditService = auditService;
     }
 
     public async Task<AccountResponse> CreateAsync(
@@ -25,6 +27,11 @@ public sealed class AccountService : IAccountService
         CancellationToken cancellationToken)
     {
         var account = Account.Open(userId, request.Name, request.Type);
+
+        // Two rows, one commit (BR-36) — see the same note in
+        // AuthService.RegisterAsync.
+        await using var databaseTransaction =
+            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _dbContext.Accounts.Add(account);
 
@@ -43,6 +50,19 @@ public sealed class AccountService : IAccountService
                 StatusCodes.Status409Conflict,
                 "You already have an account with that name.");
         }
+
+        // BR-36. Type but not balance: a new account is always 0.00 (BR-15),
+        // and recording a balance here would be the start of the second ledger
+        // BR-37 forbids.
+        await _auditService.RecordAsync(
+            userId,
+            AuditAction.AccountCreated,
+            nameof(Account),
+            account.Id,
+            new { Type = account.Type.ToString() },
+            cancellationToken);
+
+        await databaseTransaction.CommitAsync(cancellationToken);
 
         return Map(account);
     }

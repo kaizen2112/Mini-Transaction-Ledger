@@ -149,7 +149,7 @@ public sealed class TransferService : ITransferService
         //    duplicate the financial columns (BR-37).
         await _auditService.RecordAsync(
             userId,
-            AuditActions.TransferCreated,
+            AuditAction.TransferCreated,
             nameof(Transfer),
             transfer.Id,
             new { transfer.SourceAccountId, transfer.DestinationAccountId },

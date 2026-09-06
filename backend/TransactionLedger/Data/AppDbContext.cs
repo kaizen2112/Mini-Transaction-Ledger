@@ -24,6 +24,12 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<Transfer> Transfers => Set<Transfer>();
 
+    /// <summary>
+    /// Append-only (BR-38). Nothing in the codebase calls Update or Remove on
+    /// this set, and no controller exposes it.
+    /// </summary>
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

@@ -25,15 +25,18 @@ public sealed class AuthService : IAuthService
     private readonly AppDbContext _dbContext;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly ITokenService _tokenService;
+    private readonly IAuditService _auditService;
 
     public AuthService(
         AppDbContext dbContext,
         IPasswordHasher<User> passwordHasher,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        IAuditService auditService)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
+        _auditService = auditService;
     }
 
     public async Task<RegisterResponse> RegisterAsync(
@@ -42,6 +45,13 @@ public sealed class AuthService : IAuthService
     {
         var user = User.Register(request.Email, request.DisplayName);
         user.SetPasswordHash(_passwordHasher.HashPassword(user, request.Password));
+
+        // Registration writes two rows — the user and its audit entry — and
+        // BR-36 requires them to share one commit. Without this transaction the
+        // second SaveChanges would be a separate implicit one, so a crash
+        // between them would leave an account with no record of its creation.
+        await using var databaseTransaction =
+            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _dbContext.Users.Add(user);
 
@@ -59,6 +69,20 @@ public sealed class AuthService : IAuthService
                 StatusCodes.Status409Conflict,
                 "That email address is already registered.");
         }
+
+        // BR-36. The user audits their own creation: there is no other actor.
+        // Metadata carries no password material and no email — the Users row
+        // already holds those, and duplicating them here would spread personal
+        // data across two tables for no gain (BR-37).
+        await _auditService.RecordAsync(
+            user.Id,
+            AuditAction.UserRegistered,
+            nameof(User),
+            user.Id,
+            metadata: null,
+            cancellationToken);
+
+        await databaseTransaction.CommitAsync(cancellationToken);
 
         return new RegisterResponse(user.Id, user.Email, user.DisplayName, user.CreatedAt);
     }

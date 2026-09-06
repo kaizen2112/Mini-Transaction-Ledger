@@ -46,6 +46,8 @@ public sealed class TransactionService : ITransactionService
     {
         // 1. Explicit transaction. Everything below either commits together or
         //    rolls back together (BR-19).
+
+        // Equivalent to 'BEGIN'  
         await using var databaseTransaction =
             await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -53,6 +55,8 @@ public sealed class TransactionService : ITransactionService
         //    (BR-07/BR-29). A foreign or missing account yields no row, so
         //    "not yours" and "does not exist" are the same outcome (BR-08).
         //    The lock is held until commit.
+
+        // Locks using 'FOR UPDATE'
         var account = await LockAccountAsync(userId, accountId, cancellationToken);
 
         if (account is null)
@@ -81,11 +85,16 @@ public sealed class TransactionService : ITransactionService
             request.Category,
             request.Description);
 
+
+        // Equivalent o 'INSERT INTO'
+
         _dbContext.Transactions.Add(transaction);
 
         // 5. Update the stored balance (BR-17). Safe because the row lock from
         //    step 2 is still held.
         account.Apply(transaction);
+
+        // Equivalent o 'UPDATE'
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -93,13 +102,15 @@ public sealed class TransactionService : ITransactionService
         //    does not duplicate the financial columns (BR-37).
         await _auditService.RecordAsync(
             userId,
-            AuditActions.TransactionCreated,
+            AuditAction.TransactionCreated,
             nameof(Transaction),
             transaction.Id,
             new { transaction.AccountId, Type = transaction.Type.ToString() },
             cancellationToken);
 
         // 7. Commit. The lock is released here.
+        // Equivalent o 'COMMIT' by fulfilling Database atomic transaction
+
         await databaseTransaction.CommitAsync(cancellationToken);
 
         return Map(transaction, isReversed: false);
@@ -292,7 +303,7 @@ public sealed class TransactionService : ITransactionService
         // 8. Audit inside the same transaction (BR-36).
         await _auditService.RecordAsync(
             userId,
-            AuditActions.TransactionReversed,
+            AuditAction.TransactionReversed,
             nameof(Transaction),
             reversal.Id,
             new { OriginalTransactionId = original.Id, reversal.AccountId },
