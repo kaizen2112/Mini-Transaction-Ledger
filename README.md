@@ -1,14 +1,19 @@
 # Mini Transaction Ledger
 
-A personal financial ledger: accounts, credits and debits, atomic transfers,
-reversals, and reports — built to be explained line by line rather than to
-ship fast.
+Every entry in this ledger is permanent. Balances move by adding new
+transactions, never by editing old ones — a debit, a credit, a transfer, a
+reversal, each one an honest fact that stays on the record. It's a small
+financial system built the way a real one has to be: money handled as exact
+decimals, concurrent transfers that can't deadlock, retried requests that
+can't double-charge, and a history nothing can quietly rewrite.
 
-**Stack:** ASP.NET Core 9 Web API · Entity Framework Core 8 · PostgreSQL 16 ·
-Next.js 16 + TypeScript · xUnit + Testcontainers · Docker Compose
+**Stack**
 
-For the full architecture write-up — internals, request flow, and the Docker
-setup explained in prose — see **[EXPLANATION.md](EXPLANATION.md)**.
+- **Backend** — ASP.NET Core 9 Web API, Entity Framework Core 8
+- **Database** — PostgreSQL 16
+- **Frontend** — Next.js 16, TypeScript
+- **Testing** — xUnit, Testcontainers
+- **Containerization** — Docker, Docker Compose
 
 ---
 
@@ -73,7 +78,7 @@ cp .env.example .env
 
 `.env` is gitignored and never committed. The API validates both at startup
 and refuses to boot if either is missing, rather than failing later on the
-first login (`ValidateOnStart` — see EXPLANATION.md).
+first login.
 
 ### Everyday commands
 
@@ -86,28 +91,6 @@ docker compose logs -f api     # tail one service's logs
 
 Data survives a plain `down`/`up` — Postgres writes to a named volume
 (`pgdata`), not the container's own filesystem.
-
-### Local development, without Docker (optional)
-
-This is a convenience for *actively editing* the backend, not a second way to
-"install" the app — a reviewer never needs it. Rebuilding a Docker image on
-every code change is slow; `dotnet run` against the same Postgres container is
-fast:
-
-```bash
-docker compose up db            # just the database
-cd frontend && npm install && npm run dev    # frontend, http://localhost:3000
-```
-
-```powershell
-./run-api.ps1                   # Windows/PowerShell — backend, http://localhost:8080
-```
-
-`run-api.ps1` exists purely because `dotnet run` on its own has no database
-connection string or signing key. It reads the same `.env` file and passes the
-same environment variables Docker Compose would — not a separate mechanism,
-just the same one without the containers, and only useful on a machine already
-set up for .NET development.
 
 ---
 
@@ -153,9 +136,8 @@ flowchart TD
 ```
 
 Every arrow back to a hub screen is deliberate: nothing in this app is a
-dead-end form. See **EXPLANATION.md** for what happens on the server side of
-"Add transaction" and "New transfer" specifically — that's where the
-idempotency and locking logic lives.
+dead-end form. "Add transaction" and "New transfer" are the two screens
+backed by the idempotency and locking logic covered in the technical report.
 
 ---
 
@@ -261,7 +243,6 @@ frontend/
   lib/                        api client, auth/session, formatting, hooks
   types/                      hand-written mirrors of the backend DTOs
 docker-compose.yml             db + api + web, wired together
-EXPLANATION.md                 architecture, internals, and Docker setup, in prose
 ```
 
 A modular monolith, organised by folder rather than split into layered
@@ -283,9 +264,6 @@ more, and the simpler structure is easier to defend.
 | Errors carry a stable `code` | The frontend switches on `code`, never on human-readable text, so wording can change without breaking clients. |
 | `curl` installed explicitly in the API image | The .NET 8+ runtime images ship without it as a hardening measure; without this line the Docker healthcheck fails and `web` never starts. Found by testing the image directly, not assumed. |
 
-Fuller rationale for the request-flow decisions (idempotency, lock ordering)
-is in **EXPLANATION.md**.
-
 ---
 
 ## API
@@ -304,15 +282,3 @@ every protected endpoint can be exercised from the browser.
 | `POST` | `/api/transactions/{id}/reverse` | by construction |
 | `GET` `POST` | `/api/transfers` | **required on POST** |
 | `GET` | `/api/reports/{summary,categories,monthly}` | — |
-
----
-
-## Known scope limits
-
-| Not built | Why |
-|---|---|
-| CSV/PDF export | No user story required it in this pass |
-| Refresh tokens | 60-minute access token only; out of scope for this pass |
-| Audit log UI | The data is recorded (every balance-affecting action); there is no screen to browse it yet |
-| Multi-currency | Requires FX rates and rounding policy — a different product |
-| CI pipeline | Tests and Docker both work locally; no GitHub Actions workflow wired up yet |
