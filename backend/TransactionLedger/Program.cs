@@ -1,11 +1,13 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
 using TransactionLedger.Configuration;
 using TransactionLedger.Data;
@@ -76,6 +78,12 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<CorsSettings>()
+    .Bind(builder.Configuration.GetSection(CorsSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 {
     var dbSettings = serviceProvider.GetRequiredService<IOptions<DatabaseSettings>>().Value;
@@ -139,6 +147,37 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors();
+
+// Configured through IOptions rather than by reading builder.Configuration
+// inline, matching the JwtBearerOptions block above: one pattern for every
+// options type in this file.
+builder.Services
+    .AddOptions<CorsOptions>()
+    .Configure<IOptions<CorsSettings>>((options, corsSettings) =>
+    {
+        options.AddPolicy(CorsSettings.PolicyName, policy => policy
+            .WithOrigins(corsSettings.Value.AllowedOrigins)
+            // GET and POST only: nothing in this API updates or deletes.
+            // The ledger is append-only (BR-21/BR-22), so there is no PUT,
+            // PATCH or DELETE to allow. OPTIONS is the preflight itself and
+            // is handled by the middleware, not by this list.
+            .WithMethods(HttpMethods.Get, HttpMethods.Post)
+            // Idempotency-Key is a custom header, so it is NOT on the CORS
+            // safelist and any request carrying it is preflighted. Omit it
+            // here and every POST to /transactions and /transfers fails
+            // before it reaches a controller.
+            .WithHeaders(
+                HeaderNames.Authorization,
+                HeaderNames.ContentType,
+                IdempotencyHeader.Name)
+            // Response headers are hidden from JavaScript unless exposed.
+            // The replay header ARRIVES either way; without this line fetch()
+            // simply cannot see it, and the frontend cannot tell a replay
+            // from a fresh create (BR-34).
+            .WithExposedHeaders(IdempotencyHeader.ReplayName));
+    });
+
 builder.Services
     .AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database");
@@ -180,10 +219,13 @@ var app = builder.Build();
 //      endpoint, so it sits above auth deliberately
 //   3. UseRouting - matches the endpoint and attaches its metadata, which
 //      UseAuthorization below cannot read until it has run
-//   4. UseAuthentication - turns the bearer token into a ClaimsPrincipal
-//   5. UseAuthorization - enforces the matched endpoint's policy using that
-//      principal; nothing to judge without step 4
-//   6. MapControllers - terminal
+//   4. UseCors - after routing so the endpoint's metadata exists, and before
+//      authentication so a preflight OPTIONS (which carries no token) gets
+//      its CORS headers back instead of a 401
+//   5. UseAuthentication - turns the bearer token into a ClaimsPrincipal
+//   6. UseAuthorization - enforces the matched endpoint's policy using that
+//      principal; nothing to judge without step 5
+//   7. MapControllers - terminal
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -193,6 +235,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+
+app.UseCors(CorsSettings.PolicyName);
 
 app.UseAuthentication();
 app.UseAuthorization();

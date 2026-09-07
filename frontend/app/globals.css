@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+ * One palette, one light theme. Dark mode is a stated non-goal
+ * (docs/12-frontend-plan.md §7), so the template's prefers-color-scheme block
+ * is deliberately gone: a half-applied dark theme reads as a bug, not a
+ * feature.
+ */
+@theme {
+  --color-canvas: #fbfaf9;
+  --color-surface: #ffffff;
+  --color-line: #e7e4e0;
+  --color-line-strong: #d6d1cb;
+
+  --color-ink: #1c1917;
+  --color-ink-soft: #57534e;
+  --color-ink-faint: #8a827b;
+
+  /* Rust accent, from the reference design. */
+  --color-brand: #b8460e;
+  --color-brand-hover: #9a3a0b;
+  --color-brand-tint: #fdf2ec;
+
+  /* Money direction. Credits read green, debits read red (§4.4). */
+  --color-credit: #067647;
+  --color-credit-tint: #ecfdf3;
+  --color-debit: #d92d20;
+  --color-debit-tint: #fef3f2;
+
+  --color-warn: #b54708;
+  --color-warn-tint: #fffaeb;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Money and ids line up in tables when the digits are tabular. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
