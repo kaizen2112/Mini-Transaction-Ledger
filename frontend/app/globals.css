@@ -16,10 +16,14 @@
   --color-ink-soft: #57534e;
   --color-ink-faint: #8a827b;
 
-  /* Rust accent, from the reference design. */
-  --color-brand: #b8460e;
-  --color-brand-hover: #9a3a0b;
-  --color-brand-tint: #fdf2ec;
+  /*
+   * White + green, deliberately apart from the rust/orange reference design
+   * (§7 update). Chosen a shade darker/cooler than --color-credit below so a
+   * brand button and a "money in" figure never read as the same signal.
+   */
+  --color-brand: #15803d;
+  --color-brand-hover: #14532d;
+  --color-brand-tint: #f0fdf4;
 
   /* Money direction. Credits read green, debits read red (§4.4). */
   --color-credit: #067647;
@@ -29,6 +33,15 @@
 
   --color-warn: #b54708;
   --color-warn-tint: #fffaeb;
+
+  /*
+   * Amber — green's complement, reserved for the one control that needs to
+   * pop out of an otherwise plain list of inputs (the active-account
+   * selector). Kept out of --color-warn's territory (warnings) and
+   * --color-debit's (red) on purpose.
+   */
+  --color-accent: #b45309;
+  --color-accent-tint: #fffbeb;
 }
 
 html,

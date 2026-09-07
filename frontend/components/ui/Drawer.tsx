@@ -23,11 +23,26 @@ export function Drawer({
 }) {
   const panel = useRef<HTMLDivElement>(null);
 
+  // Every keystroke inside the form re-renders whichever drawer is open, and
+  // that drawer passes a freshly-created `close` function as `onClose` on
+  // every render (it is not wrapped in useCallback — it does not need to be,
+  // for anything except this effect). If `onClose` sat in the dependency
+  // array below, that would re-run this effect on every keystroke, and the
+  // effect's own querySelector(...).focus() would steal focus onto the
+  // panel's first focusable element — the header's Close button, since it
+  // comes before the form in DOM order — away from whatever field the user
+  // was typing in. A ref sidesteps that: the effect only re-runs when `open`
+  // itself changes, while the keydown handler still calls the latest onClose.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -42,7 +57,7 @@ export function Drawer({
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

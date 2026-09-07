@@ -24,8 +24,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-surface">
+    // h-screen + overflow-hidden on the outer flex row is what stops the
+    // WHOLE page (sidebar included) from scrolling together: with only
+    // min-h-screen, the flex row grows past the viewport as content grows,
+    // and the sidebar — just a flex sibling, not fixed — scrolls away with
+    // it. Giving <main> its own overflow-y-auto makes it the only thing that
+    // scrolls; the sidebar's height is pinned to the viewport instead.
+    <div className="flex h-screen overflow-hidden">
+      <aside className="flex h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
         <div className="flex items-center gap-2 px-5 py-5">
           <span className="text-lg font-semibold tracking-tight text-brand">Ledger</span>
         </div>
@@ -67,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1">
+      <main className="h-screen min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-8 py-8">{children}</div>
       </main>
     </div>

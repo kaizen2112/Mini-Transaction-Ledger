@@ -215,7 +215,7 @@ function TransactionsPageInner() {
           id="account-select"
           value={accountId}
           onChange={(e) => changeAccount(e.target.value)}
-          className="rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm focus:outline-2 focus:outline-brand"
+          className="rounded-lg border-2 border-accent bg-accent-tint px-3 py-1.5 text-sm font-medium text-accent focus:outline-2 focus:outline-brand"
         >
           {accounts.data?.accounts.map((account) => (
             <option key={account.id} value={account.id}>

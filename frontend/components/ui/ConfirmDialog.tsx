@@ -21,11 +21,20 @@ export function ConfirmDialog({
 }) {
   const panel = useRef<HTMLDivElement>(null);
 
+  // Same fix as Drawer.tsx: onClose is a new function on every parent
+  // re-render, so it cannot sit in this effect's dependency array without
+  // re-running (and re-stealing focus) on every keystroke in the optional
+  // description field. See the comment there for the full explanation.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -38,7 +47,7 @@ export function ConfirmDialog({
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
