@@ -9,7 +9,7 @@ import { Card, StatCard } from '@/components/ui/Card';
 import { EmptyState, ErrorNotice, LoadingState } from '@/components/ui/Feedback';
 import { CreateAccountDrawer } from '@/components/accounts/CreateAccountDrawer';
 import { api } from '@/lib/api';
-import { ApiError, messageFor } from '@/lib/errors';
+import { messageFor, traceIdFor } from '@/lib/errors';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useResource } from '@/lib/useResource';
 import type { AccountListResponse } from '@/types/api';
@@ -48,7 +48,7 @@ export default function AccountsPage() {
         <div className="mb-6">
           <ErrorNotice
             message={messageFor(accounts.error)}
-            traceId={accounts.error instanceof ApiError ? accounts.error.traceId : undefined}
+            traceId={traceIdFor(accounts.error)}
             onRetry={reload}
           />
         </div>

@@ -109,6 +109,18 @@ const MESSAGES: Record<string, string> = {
   [ErrorCode.InternalError]: 'Something went wrong on our end.',
 };
 
+/**
+ * A trace id is only worth showing for a genuinely unexpected failure — the
+ * one kind of error where a bug report needs a server-side log line to
+ * investigate. Every other ApiError (insufficient funds, a duplicate name, a
+ * bad date range, ...) is a routine, expected rejection the message already
+ * explains completely; a trace id next to it reads as "something broke" when
+ * nothing did.
+ */
+export function traceIdFor(error: unknown): string | undefined {
+  return error instanceof ApiError && error.status >= 500 ? error.traceId : undefined;
+}
+
 /** One sentence a person can act on. Never a raw JSON dump. */
 export function messageFor(error: unknown): string {
   if (error instanceof NetworkError) {

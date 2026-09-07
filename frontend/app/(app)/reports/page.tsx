@@ -7,7 +7,7 @@ import { EmptyState, ErrorNotice } from '@/components/ui/Feedback';
 import { ChartSkeleton, StatCardSkeleton } from '@/components/ui/Skeleton';
 import { CategoryBars } from '@/components/charts/CategoryBars';
 import { api } from '@/lib/api';
-import { ApiError, ErrorCode, messageFor } from '@/lib/errors';
+import { ApiError, ErrorCode, messageFor, traceIdFor } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import { endOfDayUtc, startOfDayUtc } from '@/lib/query';
 import { useResource } from '@/lib/useResource';
@@ -134,7 +134,7 @@ export default function ReportsPage() {
         {summary.status === 'error' && !rangeError && (
           <ErrorNotice
             message={messageFor(summary.error)}
-            traceId={summary.error instanceof ApiError ? summary.error.traceId : undefined}
+            traceId={traceIdFor(summary.error)}
             onRetry={reloadSummary}
           />
         )}
@@ -225,7 +225,7 @@ export default function ReportsPage() {
           {categories.status === 'error' && !foreignAccount && !rangeError && (
             <ErrorNotice
               message={messageFor(categories.error)}
-              traceId={categories.error instanceof ApiError ? categories.error.traceId : undefined}
+              traceId={traceIdFor(categories.error)}
               onRetry={reloadCategories}
             />
           )}

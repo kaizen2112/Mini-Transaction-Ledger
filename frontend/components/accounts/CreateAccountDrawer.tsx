@@ -6,7 +6,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Input, Select } from '@/components/ui/Field';
 import { ErrorNotice } from '@/components/ui/Feedback';
 import { api } from '@/lib/api';
-import { ApiError, ErrorCode, fieldErrors, messageFor } from '@/lib/errors';
+import { ApiError, ErrorCode, fieldErrors, messageFor, traceIdFor } from '@/lib/errors';
 import { ACCOUNT_TYPES, type AccountType } from '@/types/api';
 
 /**
@@ -99,7 +99,7 @@ export function CreateAccountDrawer({
           {error != null && !nameTaken && Object.keys(fields).length === 0 && (
             <ErrorNotice
               message={messageFor(error)}
-              traceId={error instanceof ApiError ? error.traceId : undefined}
+              traceId={traceIdFor(error)}
             />
           )}
         </div>

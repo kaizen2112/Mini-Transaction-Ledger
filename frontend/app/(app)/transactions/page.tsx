@@ -15,7 +15,7 @@ import {
   type TransactionFilterState,
 } from '@/components/transactions/TransactionFilters';
 import { api } from '@/lib/api';
-import { ApiError, ErrorCode, messageFor } from '@/lib/errors';
+import { ApiError, ErrorCode, messageFor, traceIdFor } from '@/lib/errors';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, endOfDayUtc, startOfDayUtc, type PageSize } from '@/lib/query';
 import { useResource } from '@/lib/useResource';
 import type {
@@ -162,7 +162,7 @@ function TransactionsPageInner() {
         <PageHeader title="Transactions" subtitle="Log and review money moving in and out of your accounts." />
         <ErrorNotice
           message={messageFor(accounts.error)}
-          traceId={accounts.error instanceof ApiError ? accounts.error.traceId : undefined}
+          traceId={traceIdFor(accounts.error)}
           onRetry={reloadAccounts}
         />
       </>
@@ -229,7 +229,7 @@ function TransactionsPageInner() {
         <div className="mb-4">
           <ErrorNotice
             message={genericError}
-            traceId={transactions.error instanceof ApiError ? transactions.error.traceId : undefined}
+            traceId={traceIdFor(transactions.error)}
             onRetry={reload}
           />
         </div>

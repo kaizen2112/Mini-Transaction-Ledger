@@ -4,9 +4,10 @@ import { Spinner } from '@/components/ui/Spinner';
 /**
  * An error the user should see, with the traceId when there is one.
  *
- * The traceId is shown deliberately: it is in the problem+json body (contract
- * §1.1) and it is the one thing that makes a bug report actionable. Hiding it
- * to keep the UI tidy costs more than it saves.
+ * `traceId` is deliberately not "whatever the API sent" — callers pass it
+ * through lib/errors.ts's traceIdFor(), which only surfaces one for a
+ * genuinely unexpected (5xx) failure. A routine, expected rejection like
+ * INSUFFICIENT_FUNDS explains itself in `message` and never carries one.
  */
 export function ErrorNotice({
   message,

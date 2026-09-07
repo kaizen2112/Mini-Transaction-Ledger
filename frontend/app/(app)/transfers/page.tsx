@@ -9,7 +9,7 @@ import { EmptyState, ErrorNotice, LoadingState } from '@/components/ui/Feedback'
 import { Pagination } from '@/components/ui/Pagination';
 import { CreateTransferDrawer } from '@/components/transfers/CreateTransferDrawer';
 import { api } from '@/lib/api';
-import { ApiError, messageFor } from '@/lib/errors';
+import { messageFor, traceIdFor } from '@/lib/errors';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { DEFAULT_PAGE_SIZE, type PageSize } from '@/lib/query';
 import { useResource } from '@/lib/useResource';
@@ -55,7 +55,7 @@ export default function TransfersPage() {
         <PageHeader title="Transfers" subtitle="Move money between your own accounts." />
         <ErrorNotice
           message={messageFor(accounts.error)}
-          traceId={accounts.error instanceof ApiError ? accounts.error.traceId : undefined}
+          traceId={traceIdFor(accounts.error)}
           onRetry={reloadAccounts}
         />
       </>
@@ -84,7 +84,7 @@ export default function TransfersPage() {
         <div className="mb-4">
           <ErrorNotice
             message={messageFor(transfers.error)}
-            traceId={transfers.error instanceof ApiError ? transfers.error.traceId : undefined}
+            traceId={traceIdFor(transfers.error)}
             onRetry={reload}
           />
         </div>

@@ -6,7 +6,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Input, Select } from '@/components/ui/Field';
 import { ErrorNotice } from '@/components/ui/Feedback';
 import { api } from '@/lib/api';
-import { ApiError, ErrorCode, fieldErrors, messageFor } from '@/lib/errors';
+import { ApiError, ErrorCode, fieldErrors, messageFor, traceIdFor } from '@/lib/errors';
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
 import { ASSIGNABLE_CATEGORIES, TRANSACTION_TYPES, type TransactionCategory, type TransactionType } from '@/types/api';
 
@@ -151,7 +151,7 @@ export function CreateTransactionDrawer({
             error={fields.description}
           />
 
-          {showBanner && <ErrorNotice message={messageFor(error)} traceId={error instanceof ApiError ? error.traceId : undefined} />}
+          {showBanner && <ErrorNotice message={messageFor(error)} traceId={traceIdFor(error)} />}
         </div>
 
         <div className="mt-6 space-y-2">

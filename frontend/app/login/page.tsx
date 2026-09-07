@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { ErrorNotice, LoadingState } from '@/components/ui/Feedback';
 import { useAuth } from '@/lib/auth';
-import { ApiError, fieldErrors, messageFor } from '@/lib/errors';
+import { fieldErrors, messageFor, traceIdFor } from '@/lib/errors';
 
 function LoginForm() {
   const { status, signIn } = useAuth();
@@ -91,7 +91,7 @@ function LoginForm() {
         {error != null && Object.keys(fields).length === 0 && (
           <ErrorNotice
             message={messageFor(error)}
-            traceId={error instanceof ApiError ? error.traceId : undefined}
+            traceId={traceIdFor(error)}
           />
         )}
 

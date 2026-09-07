@@ -10,7 +10,7 @@ import { ErrorNotice, LoadingState } from '@/components/ui/Feedback';
 import { ReverseTransactionDialog } from '@/components/transactions/ReverseTransactionDialog';
 import { TransactionTable } from '@/components/transactions/TransactionTable';
 import { api } from '@/lib/api';
-import { ApiError, ErrorCode, messageFor } from '@/lib/errors';
+import { ApiError, ErrorCode, messageFor, traceIdFor } from '@/lib/errors';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { useResource } from '@/lib/useResource';
 import type { AccountBalanceResponse, AccountResponse, PagedResponse, TransactionResponse } from '@/types/api';
@@ -79,7 +79,7 @@ export default function AccountDetailPage() {
     return (
       <ErrorNotice
         message={messageFor(detail.error)}
-        traceId={detail.error instanceof ApiError ? detail.error.traceId : undefined}
+        traceId={traceIdFor(detail.error)}
         onRetry={reload}
       />
     );

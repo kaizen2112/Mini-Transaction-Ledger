@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { ErrorNotice } from '@/components/ui/Feedback';
 import { api } from '@/lib/api';
-import { ApiError, fieldErrors, messageFor } from '@/lib/errors';
+import { fieldErrors, messageFor, traceIdFor } from '@/lib/errors';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -79,7 +79,7 @@ export default function RegisterPage() {
         {error != null && Object.keys(fields).length === 0 && (
           <ErrorNotice
             message={messageFor(error)}
-            traceId={error instanceof ApiError ? error.traceId : undefined}
+            traceId={traceIdFor(error)}
           />
         )}
 

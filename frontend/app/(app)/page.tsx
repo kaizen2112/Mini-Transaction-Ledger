@@ -11,7 +11,7 @@ import { EmptyState, ErrorNotice } from '@/components/ui/Feedback';
 import { ChartSkeleton, Skeleton, StatCardSkeleton } from '@/components/ui/Skeleton';
 import { CategoryBars } from '@/components/charts/CategoryBars';
 import { api } from '@/lib/api';
-import { ApiError, messageFor } from '@/lib/errors';
+import { messageFor, traceIdFor } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import { useResource } from '@/lib/useResource';
@@ -103,7 +103,7 @@ export default function DashboardPage() {
         <div className="mb-6">
           <ErrorNotice
             message={messageFor(summary.error)}
-            traceId={summary.error instanceof ApiError ? summary.error.traceId : undefined}
+            traceId={traceIdFor(summary.error)}
             onRetry={reloadSummary}
           />
         </div>
