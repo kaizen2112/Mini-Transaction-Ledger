@@ -6,45 +6,30 @@ import { Card, StatCard } from '@/components/ui/Card';
 import { EmptyState, ErrorNotice } from '@/components/ui/Feedback';
 import { ChartSkeleton, StatCardSkeleton } from '@/components/ui/Skeleton';
 import { CategoryBars } from '@/components/charts/CategoryBars';
-import { MonthlyBars } from '@/components/charts/MonthlyBars';
 import { api } from '@/lib/api';
 import { ApiError, ErrorCode, messageFor } from '@/lib/errors';
-import { formatMoney, formatMonth } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 import { endOfDayUtc, startOfDayUtc } from '@/lib/query';
 import { useResource } from '@/lib/useResource';
-import type {
-  AccountListResponse,
-  CategoryReportResponse,
-  MonthlyReportResponse,
-  SummaryReportResponse,
-} from '@/types/api';
+import type { AccountListResponse, CategoryReportResponse, SummaryReportResponse } from '@/types/api';
 
 const CONTROL =
   'rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink ' +
   'focus:outline-2 focus:outline-brand';
 
-/** Enough to cover a backdated import without offering all 8,000 years the API allows. */
-function yearOptions(): number[] {
-  const thisYear = new Date().getUTCFullYear();
-  return Array.from({ length: 6 }, (_, index) => thisYear - index);
-}
-
 /**
- * /reports per docs/12-frontend-plan.md §4.6 — three sections, each a direct
+ * /reports per docs/12-frontend-plan.md §4.6 — two sections, each a direct
  * render of one endpoint, each loading independently so one failure does not
- * blank the other two.
+ * blank the other.
  *
  * The date range is hoisted above Summary and Categories because it is the
  * SAME from/to parameter on both endpoints; duplicating the picker would
  * invite the two halves of one page to disagree about which period they show.
- * Monthly keeps its own year selector because it takes a different parameter
- * entirely.
  */
 export default function ReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [accountId, setAccountId] = useState('');
-  const [year, setYear] = useState<string>('');
 
   const range = useMemo(
     () => ({
@@ -70,12 +55,6 @@ export default function ReportsPage() {
   );
   const [categories, reloadCategories] = useResource<CategoryReportResponse>(fetchCategories);
 
-  const fetchMonthly = useCallback(
-    (signal: AbortSignal) => api.reports.monthly({ year: year ? Number(year) : undefined }, signal),
-    [year],
-  );
-  const [monthly, reloadMonthly] = useResource<MonthlyReportResponse>(fetchMonthly);
-
   // An inverted range is a 400 from every endpoint that takes one. Shown once,
   // under the controls that caused it, rather than as three identical banners
   // (§5.4: inline on the offending control).
@@ -93,7 +72,7 @@ export default function ReportsPage() {
     <>
       <PageHeader
         title="Reports"
-        subtitle="Turn your ledger into totals: what you have, where it went, and how the months compare."
+        subtitle="Turn your ledger into totals: what you have, and where it went."
       />
 
       {/* ------------------------------------------------ shared date range */}
@@ -278,85 +257,6 @@ export default function ReportsPage() {
             Spending only. Transfers between your own accounts and reversed transactions are
             excluded.
           </p>
-        </Card>
-      </section>
-
-      {/* ------------------------------------------------------- 3. monthly */}
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-ink">Income vs expenses by month</h2>
-          <label className="flex items-center gap-2 text-xs text-ink-faint">
-            Year
-            <select
-              value={year}
-              onChange={(event) => setYear(event.target.value)}
-              className={CONTROL}
-            >
-              <option value="">Last 12 months</option>
-              {yearOptions().map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <Card className="px-5 py-5">
-          {monthly.status === 'loading' && <ChartSkeleton rows={4} />}
-
-          {monthly.status === 'error' && (
-            <ErrorNotice
-              message={messageFor(monthly.error)}
-              traceId={monthly.error instanceof ApiError ? monthly.error.traceId : undefined}
-              onRetry={reloadMonthly}
-            />
-          )}
-
-          {monthly.data && monthly.data.months.length === 0 && (
-            <p className="py-6 text-center text-sm text-ink-faint">
-              No activity in this period.
-            </p>
-          )}
-
-          {monthly.data && monthly.data.months.length > 0 && (
-            <>
-              <MonthlyBars months={monthly.data.months} />
-
-              <div className="mt-5 overflow-x-auto border-t border-line pt-3">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
-                      <th className="py-2 font-medium">Month</th>
-                      <th className="py-2 text-right font-medium">Credits</th>
-                      <th className="py-2 text-right font-medium">Debits</th>
-                      <th className="py-2 text-right font-medium">Net</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monthly.data.months.map((month) => (
-                      <tr key={`${month.year}-${month.month}`} className="border-t border-line">
-                        <td className="py-2 text-ink">{formatMonth(month.year, month.month)}</td>
-                        <td className="tabular py-2 text-right text-credit">
-                          {formatMoney(month.credits)}
-                        </td>
-                        <td className="tabular py-2 text-right text-debit">
-                          {formatMoney(month.debits)}
-                        </td>
-                        <td
-                          className={`tabular py-2 text-right font-medium ${
-                            month.net >= 0 ? 'text-credit' : 'text-debit'
-                          }`}
-                        >
-                          {formatMoney(month.net)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
         </Card>
       </section>
 

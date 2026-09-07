@@ -23,7 +23,14 @@ public enum TransactionCategory
     Transfer = 8,
 
     /// <summary>System-only (BR-24). Assigned to reversal rows in B9.</summary>
-    Reversal = 9
+    Reversal = 9,
+
+    /// <summary>
+    /// Explicit value, not 8 (Transfer's slot): the column is a plain
+    /// integer with no CHECK constraint, so any already-stored row's
+    /// category is only as correct as its number never being reassigned.
+    /// </summary>
+    Rent = 10
 }
 
 public static class TransactionCategoryExtensions

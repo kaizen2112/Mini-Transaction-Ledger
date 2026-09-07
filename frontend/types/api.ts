@@ -28,6 +28,7 @@ export const TRANSACTION_CATEGORIES = [
   'Food',
   'Transport',
   'Bills',
+  'Rent',
   'Shopping',
   'Entertainment',
   'Health',

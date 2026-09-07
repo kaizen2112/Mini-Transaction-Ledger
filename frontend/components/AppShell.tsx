@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 /**
  * The sidebar shell from docs/12-frontend-plan.md §3.3 — flat, no
@@ -32,8 +33,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // scrolls; the sidebar's height is pinned to the viewport instead.
     <div className="flex h-screen overflow-hidden">
       <aside className="flex h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
-        <div className="flex items-center gap-2 px-5 py-5">
+        <div className="flex items-center justify-between gap-2 px-5 py-5">
           <span className="text-lg font-semibold tracking-tight text-brand">Ledger</span>
+          <ThemeToggle />
         </div>
 
         <nav className="flex-1 px-3">

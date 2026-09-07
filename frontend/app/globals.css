@@ -1,20 +1,23 @@
 @import "tailwindcss";
 
 /*
- * One palette, one light theme. Dark mode is a stated non-goal
- * (docs/12-frontend-plan.md §7), so the template's prefers-color-scheme block
- * is deliberately gone: a half-applied dark theme reads as a bug, not a
- * feature.
+ * Every component reads colour through these custom properties (bg-canvas,
+ * text-ink-faint, ...) rather than literal Tailwind shades, which is what
+ * makes dark mode below a palette swap instead of a per-component change:
+ * redefining the same variable names under [data-theme="dark"] is enough for
+ * every utility class in the app to repaint.
  */
 @theme {
   --color-canvas: #fbfaf9;
   --color-surface: #ffffff;
-  --color-line: #e7e4e0;
-  --color-line-strong: #d6d1cb;
+  --color-line: #e2ddd6;
+  --color-line-strong: #d0cac2;
 
   --color-ink: #1c1917;
   --color-ink-soft: #57534e;
-  --color-ink-faint: #8a827b;
+  /* Stone-500, one step darker than the original #8a827b — that value read
+     as too faint (~3.3:1 on white) for body-adjacent secondary text. */
+  --color-ink-faint: #78716c;
 
   /*
    * White + green, deliberately apart from the rust/orange reference design
@@ -44,6 +47,81 @@
   --color-accent-tint: #fffbeb;
 }
 
+/*
+ * Dark palette. Same token names, values chosen for the SAME contrast
+ * relationships as light (ink > ink-soft > ink-faint; credit/debit/warn/accent
+ * legible as both text and tinted-badge backgrounds) rather than a literal
+ * colour inversion.
+ *
+ * Two blocks, deliberately: the media-query block is what a visitor with no
+ * saved preference gets, following the OS; the attribute block is what
+ * ThemeToggle writes once someone picks explicitly, and wins over the OS
+ * either way because an attribute selector outranks a bare :root. Sharing one
+ * set of values between them, rather than writing the palette once and
+ * @importing it twice, keeps this whole theme in one place to read.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-canvas: #0c0a09;
+    --color-surface: #1c1917;
+    --color-line: #2f2b27;
+    --color-line-strong: #46403a;
+
+    --color-ink: #faf9f8;
+    --color-ink-soft: #d6d1cb;
+    --color-ink-faint: #a39c94;
+
+    --color-brand: #22c55e;
+    --color-brand-hover: #4ade80;
+    --color-brand-tint: #112118;
+
+    --color-credit: #34d399;
+    --color-credit-tint: #0f2318;
+    --color-debit: #f87171;
+    --color-debit-tint: #2c1512;
+
+    --color-warn: #fbbf24;
+    --color-warn-tint: #2b2107;
+
+    --color-accent: #f59e0b;
+    --color-accent-tint: #2b2007;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-canvas: #0c0a09;
+  --color-surface: #1c1917;
+  --color-line: #2f2b27;
+  --color-line-strong: #46403a;
+
+  --color-ink: #faf9f8;
+  --color-ink-soft: #d6d1cb;
+  --color-ink-faint: #a39c94;
+
+  --color-brand: #22c55e;
+  --color-brand-hover: #4ade80;
+  --color-brand-tint: #112118;
+
+  --color-credit: #34d399;
+  --color-credit-tint: #0f2318;
+  --color-debit: #f87171;
+  --color-debit-tint: #2c1512;
+
+  --color-warn: #fbbf24;
+  --color-warn-tint: #2b2107;
+
+  --color-accent: #f59e0b;
+  --color-accent-tint: #2b2007;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 html,
 body {
   height: 100%;
@@ -53,6 +131,7 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* Money and ids line up in tables when the digits are tabular. */

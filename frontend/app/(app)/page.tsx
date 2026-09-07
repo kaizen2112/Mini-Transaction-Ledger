@@ -10,7 +10,6 @@ import { DeltaBadge } from '@/components/ui/DeltaBadge';
 import { EmptyState, ErrorNotice } from '@/components/ui/Feedback';
 import { ChartSkeleton, Skeleton, StatCardSkeleton } from '@/components/ui/Skeleton';
 import { CategoryBars } from '@/components/charts/CategoryBars';
-import { MonthlyBars } from '@/components/charts/MonthlyBars';
 import { api } from '@/lib/api';
 import { ApiError, messageFor } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
@@ -174,7 +173,61 @@ export default function DashboardPage() {
             ) : null}
           </div>
 
-          <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              <Card className="px-5 py-5">
+                <h2 className="mb-4 text-sm font-medium text-ink">Accounts</h2>
+
+                {accounts.status === 'loading' && (
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                )}
+
+                {accounts.data && (
+                  <ul className="space-y-1">
+                    {accounts.data.accounts.map((account) => (
+                      <li key={account.id}>
+                        <Link
+                          href={`/accounts/${account.id}`}
+                          className="flex items-center justify-between rounded-lg px-2 py-2 hover:bg-canvas"
+                        >
+                          <span className="text-sm font-medium text-ink">{account.name}</span>
+                          <span className="tabular text-sm text-ink-soft">
+                            {formatMoney(account.balance)}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+
+              <Card className="px-5 py-5">
+                <h2 className="mb-4 text-sm font-medium text-ink">Quick actions</h2>
+                <ul className="space-y-1">
+                  {[
+                    { href: '/transactions', label: 'Record a transaction' },
+                    { href: '/transfers', label: 'Move money between accounts' },
+                    { href: '/reports', label: 'View full reports' },
+                  ].map((action) => (
+                    <li key={action.href}>
+                      <Link
+                        href={action.href}
+                        className="flex items-center justify-between rounded-lg px-2 py-2 text-sm text-ink hover:bg-canvas"
+                      >
+                        {action.label}
+                        <span aria-hidden="true" className="text-ink-faint">
+                          →
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </div>
+
             <Card className="px-5 py-5">
               <h2 className="text-sm font-medium text-ink">Spending by category</h2>
               <p className="mb-4 text-xs text-ink-faint">This month</p>
@@ -199,77 +252,6 @@ export default function DashboardPage() {
                   </p>
                 </>
               )}
-            </Card>
-
-            <Card className="px-5 py-5">
-              <h2 className="text-sm font-medium text-ink">Income vs expenses</h2>
-              <p className="mb-4 text-xs text-ink-faint">Last 12 months</p>
-
-              {monthly.status === 'loading' && <ChartSkeleton rows={4} />}
-
-              {monthly.status === 'error' && <ErrorNotice message={messageFor(monthly.error)} />}
-
-              {monthly.data && monthly.data.months.length === 0 && (
-                <p className="py-8 text-center text-sm text-ink-faint">No activity yet.</p>
-              )}
-
-              {monthly.data && monthly.data.months.length > 0 && (
-                <MonthlyBars months={monthly.data.months} />
-              )}
-            </Card>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="px-5 py-5">
-              <h2 className="mb-4 text-sm font-medium text-ink">Accounts</h2>
-
-              {accounts.status === 'loading' && (
-                <div className="space-y-3">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              )}
-
-              {accounts.data && (
-                <ul className="space-y-1">
-                  {accounts.data.accounts.map((account) => (
-                    <li key={account.id}>
-                      <Link
-                        href={`/accounts/${account.id}`}
-                        className="flex items-center justify-between rounded-lg px-2 py-2 hover:bg-canvas"
-                      >
-                        <span className="text-sm font-medium text-ink">{account.name}</span>
-                        <span className="tabular text-sm text-ink-soft">
-                          {formatMoney(account.balance)}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card className="px-5 py-5">
-              <h2 className="mb-4 text-sm font-medium text-ink">Quick actions</h2>
-              <ul className="space-y-1">
-                {[
-                  { href: '/transactions', label: 'Record a transaction' },
-                  { href: '/transfers', label: 'Move money between accounts' },
-                  { href: '/reports', label: 'View full reports' },
-                ].map((action) => (
-                  <li key={action.href}>
-                    <Link
-                      href={action.href}
-                      className="flex items-center justify-between rounded-lg px-2 py-2 text-sm text-ink hover:bg-canvas"
-                    >
-                      {action.label}
-                      <span aria-hidden="true" className="text-ink-faint">
-                        →
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
             </Card>
           </div>
         </>
